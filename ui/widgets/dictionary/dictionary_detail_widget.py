@@ -15,6 +15,13 @@ class DictionaryDetailWidget(QWidget):
     def __init__(self, dict_service, word_service, dictionary_id, main_window):
         super().__init__()
 
+        self.all_words = []
+        self.filtered_words = []
+        self.sort_column = -1
+        self.sort_order = Qt.SortOrder.AscendingOrder
+        self.search_input = None
+        self.table = None
+
         self.dict_service = dict_service
         self.word_service = word_service
         self.dictionary_id = dictionary_id
@@ -194,34 +201,47 @@ class DictionaryDetailWidget(QWidget):
                 widget.deleteLater()
 
     def load_words(self):
+        self.clear_words_area()
+
         words = self.dict_service.get_words(self.dictionary_id)
 
+        self.all_words = words
+        self.filtered_words = words.copy()
+
+        # ================= SEARCH =================
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Поиск по словам в словаре")
+        self.search_input.textChanged.connect(self.filter_words)
+
+        self.layout.addWidget(self.search_input)
+
+        # ================= TABLE =================
         self.table = QTableWidget()
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.cellDoubleClicked.connect(self.open_word_editor)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header.sectionClicked.connect(self.sort_words)
 
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels([
             "Оригинал", "Перевод", "Транскрипция", "Язык", "Сложность"
         ])
 
-        if not words:
-            label = QLabel("В словаре нет слов")
-            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.cellDoubleClicked.connect(self.open_word_editor)
 
-            self.layout.addWidget(label)
+        self.layout.addWidget(self.table)
 
-            return
+        self.render_words()
 
-        self.table.setRowCount(len(words))
+    def render_words(self):
 
-        for row, w in enumerate(words):
+        self.table.setRowCount(len(self.filtered_words))
+
+        for row, w in enumerate(self.filtered_words):
             self.table.setItem(row, 0, QTableWidgetItem(w["original"]))
             self.table.setItem(row, 1, QTableWidgetItem(w["translation"]))
             self.table.setItem(row, 2, QTableWidgetItem(w["transcription"] or ""))
@@ -230,9 +250,64 @@ class DictionaryDetailWidget(QWidget):
                 DIFFICULTY_MAP.get(w["difficulty"], "")
             ))
 
-            self.table.setVerticalHeaderItem(row, QTableWidgetItem(str(w["id"])))
+            self.table.setVerticalHeaderItem(
+                row,
+                QTableWidgetItem(str(w["id"]))
+            )
 
-        self.layout.addWidget(self.table)
+    def filter_words(self):
+        text = self.search_input.text().lower().strip()
+
+        if not text:
+            self.filtered_words = self.all_words.copy()
+        else:
+            self.filtered_words = [
+                w for w in self.all_words
+                if text in (w["original"] or "").lower()
+                   or text in (w["translation"] or "").lower()
+            ]
+
+        self.render_words()
+
+    def sort_words(self, column):
+        key_map = {
+            0: "original",
+            1: "translation",
+            2: "transcription",
+            3: "language",
+            4: "difficulty",
+        }
+
+        key = key_map.get(column)
+        if not key:
+            return
+
+        reverse = (
+                self.sort_column == column and
+                self.sort_order == Qt.SortOrder.AscendingOrder
+        )
+
+        def safe(w):
+            return w[key] if w[key] is not None else ""
+
+        self.filtered_words.sort(key=safe, reverse=reverse)
+
+        self.sort_column = column
+        self.sort_order = (
+            Qt.SortOrder.DescendingOrder if reverse
+            else Qt.SortOrder.AscendingOrder
+        )
+
+        self.render_words()
+
+    def clear_words_area(self):
+        if self.search_input:
+            self.search_input.deleteLater()
+            self.search_input = None
+
+        if self.table:
+            self.table.deleteLater()
+            self.table = None
 
     def open_word_editor(self, row, column):
         word_id = int(self.table.verticalHeaderItem(row).text())
@@ -252,14 +327,25 @@ class DictionaryDetailWidget(QWidget):
 
     # КНОПКИ
     def setup_buttons(self):
-        btn_delete = QPushButton("Удалить выбранные")
-        btn_delete.clicked.connect(self.delete_selected)
+        # ================= BUTTON PANEL =================
+        btn_container = QWidget()
+        btn_container.setObjectName("buttonPanel")
+
+        btn_layout = QHBoxLayout(btn_container)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(8)
 
         btn_add = QPushButton("Добавить слово")
         btn_add.clicked.connect(self.add_word)
 
-        self.layout.addWidget(btn_delete)
-        self.layout.addWidget(btn_add)
+        btn_delete = QPushButton("Удалить выбранные")
+        btn_delete.clicked.connect(self.delete_selected)
+
+        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(btn_delete)
+        btn_layout.addStretch()
+
+        self.layout.addWidget(btn_container)
 
     # ➕ добавить слово
     def add_word(self):

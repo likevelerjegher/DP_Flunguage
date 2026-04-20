@@ -91,26 +91,49 @@ class AddWordToDictionaryDialog(QDialog):
         self.page_new.setLayout(new_layout)
 
         # =====================================================
-        # 🔹 PAGE 2: EXISTING WORDS
+        # PAGE 2: EXISTING WORDS (FINAL)
         # =====================================================
         self.page_existing = QWidget()
         existing_layout = QVBoxLayout()
 
+        # ================= SEARCH =================
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Поиск слова")
+        self.search_input.setMinimumHeight(32)
+
+        existing_layout.addWidget(self.search_input)
+
+        # ================= DATA =================
         words = self.word_service.get_all_words()
 
-        available_words = [
+        self.all_words = [
             w for w in words
             if w["id"] not in self.dictionary_word_ids
         ]
 
-        if not available_words:
-            empty = QLabel("Нет слов для добавления")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            existing_layout.addWidget(empty)
-            self.table = None
-        else:
-            self.table = create_words_table(available_words, selectable=True)
-            existing_layout.addWidget(self.table)
+        self.filtered_words = self.all_words.copy()
+
+        # ================= EMPTY LABEL =================
+        self.empty_label = QLabel("Отсутствуют уникальные слова для добавления")
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # ================= TABLE =================
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels([
+            "Оригинал", "Перевод", "Транскрипция", "Язык", "Сложность"
+        ])
+
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        existing_layout.addWidget(self.empty_label)
+        existing_layout.addWidget(self.table)
 
         self.page_existing.setLayout(existing_layout)
 
@@ -119,6 +142,8 @@ class AddWordToDictionaryDialog(QDialog):
         self.stack.addWidget(self.page_existing)
 
         layout.addWidget(self.stack)
+
+        self.render_words()
 
         # ================= BUTTON =================
         btn_layout = QHBoxLayout()
@@ -136,6 +161,7 @@ class AddWordToDictionaryDialog(QDialog):
         self.radio_existing.toggled.connect(self.switch_mode)
 
         self.btn_add.clicked.connect(self.accept)
+        self.search_input.textChanged.connect(self.filter_words)
 
     # ================= MODE SWITCH =================
     def switch_mode(self):
@@ -176,3 +202,38 @@ class AddWordToDictionaryDialog(QDialog):
             "word_ids": word_ids
         }
 
+    def filter_words(self):
+        text = self.search_input.text().lower().strip()
+
+        if not text:
+            self.filtered_words = self.all_words.copy()
+        else:
+            self.filtered_words = [
+                w for w in self.all_words
+                if text in (w["original"] or "").lower()
+                   or text in (w["translation"] or "").lower()
+            ]
+
+        self.render_words()
+
+    def render_words(self):
+        if not self.filtered_words:
+            self.table.hide()
+            self.empty_label.show()
+            return
+
+        self.empty_label.hide()
+        self.table.show()
+
+        self.table.setRowCount(len(self.filtered_words))
+
+        for row, w in enumerate(self.filtered_words):
+            self.table.setItem(row, 0, QTableWidgetItem(w["original"] or ""))
+            self.table.setItem(row, 1, QTableWidgetItem(w["translation"] or ""))
+            self.table.setItem(row, 2, QTableWidgetItem(w["transcription"] or ""))
+            self.table.setItem(row, 3, QTableWidgetItem(w["language"] or ""))
+            self.table.setItem(row, 4, QTableWidgetItem(
+                DIFFICULTY_MAP.get(w["difficulty"], "")
+            ))
+
+            self.table.setVerticalHeaderItem(row, QTableWidgetItem(str(w["id"])))
