@@ -1,1 +1,2 @@
-*** I hate it ***
+
+I hate it 
