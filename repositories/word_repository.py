@@ -64,3 +64,32 @@ class WordRepository:
             "DELETE FROM words WHERE id = ?",
             (word_id,)
         )
+
+    def increment_correct(self, word_id):
+        self.storage.execute("""
+            UPDATE words
+            SET correct_count = COALESCE(correct_count, 0) + 1
+            WHERE id = ?
+        """, (word_id,))
+
+    def increment_wrong(self, word_id):
+        self.storage.execute("""
+            UPDATE words
+            SET wrong_count = COALESCE(wrong_count, 0) + 1
+            WHERE id = ?
+        """, (word_id,))
+
+    def update_stats(self, word_id, is_correct, time_spent):
+        if is_correct:
+            self.storage.execute("""
+                UPDATE words
+                SET correct_count = COALESCE(correct_count, 0) + 1,
+                    total_time = COALESCE(total_time, 0) + ?
+                WHERE id = ?
+            """, (time_spent, word_id))
+        else:
+            self.storage.execute("""
+                UPDATE words
+                SET wrong_count = COALESCE(wrong_count, 0) + 1
+                WHERE id = ?
+            """, (word_id,))

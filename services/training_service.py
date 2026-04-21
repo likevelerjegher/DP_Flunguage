@@ -90,10 +90,9 @@ class TrainingService:
         else:
             word["wrong_count"] = word.get("wrong_count", 0) + 1
 
-    def update_progress(self, word, is_correct):
-        if is_correct:
-            word["correct"] = word.get("correct", 0) + 1
-        else:
-            word["wrong"] = word.get("wrong", 0) + 1
-
-        # в будущем тут будет ML логика
+    def update_progress(self, word, is_correct, time_spent=0):
+        self.word_service.update_stats(
+            word["id"],
+            is_correct,
+            time_spent
+        )

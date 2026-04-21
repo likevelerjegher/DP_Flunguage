@@ -25,7 +25,8 @@ def init_db():
         language TEXT,
         difficulty INTEGER DEFAULT 1,
         correct_count INTEGER DEFAULT 0,
-        wrong_count INTEGER DEFAULT 0
+        wrong_count INTEGER DEFAULT 0,
+        total_time INTEGER DEFAULT 0
     )
     """)
 
@@ -50,6 +51,16 @@ def init_db():
         duration INTEGER
     )
     """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS training_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_id INTEGER,
+            time_sec REAL,
+            is_correct INTEGER,
+            created_at TEXT
+        )
+        """)
 
     conn.commit()
     conn.close()

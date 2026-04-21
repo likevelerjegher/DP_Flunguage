@@ -18,6 +18,7 @@ from ui.widgets.training.training_widget import TrainingWidget
 class MainWindow(QMainWindow):
     def __init__(self, dictionary_service, word_service):
         super().__init__()
+        self.icon_color_value = "#BBBBBB"
         self.word_service = word_service
         self.service = dictionary_service
         self.training_service = TrainingService(
@@ -210,6 +211,9 @@ class MainWindow(QMainWindow):
         if self.current_dictionary_screen is not None:
             self.current_dictionary_screen.refresh()
 
+    def icon_color(self):
+        return self.icon_color_value
+
     def update_styles(self):
         if self.current_theme == "dark":
             bg = "#121212"
@@ -219,6 +223,7 @@ class MainWindow(QMainWindow):
             accent = "#4CAF50"
             active = "#4CAF50"
             inactive = "#BBBBBB"
+            icon = "#BBBBBB"
         else:
             bg = "#F5F5F5"
             surface = "#FFFFFF"
@@ -227,6 +232,7 @@ class MainWindow(QMainWindow):
             accent = "#4CAF50"
             active = "#2E7D32"
             inactive = "#666666"
+            icon = "#444444"
 
         self.setStyleSheet(f"""
         QMainWindow {{
@@ -327,10 +333,57 @@ class MainWindow(QMainWindow):
         QTableWidget::item:hover {{
             background-color: {border};
         }}
+        QTabWidget::pane {{
+            border: none;
+            background: transparent;
+        }}
+        QTabBar::tab {{
+            background: transparent;
+            color: {inactive};
+        
+            padding: 10px 14px;
+        
+            border: 1px solid transparent;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }}
+        
+        QTabBar::tab:selected {{
+            color: {accent};
+            border-bottom: 2px solid {accent};
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            font-weight: bold;
+        }}
+        QTabBar::tab:hover {{
+            color: {accent};
+        }}
+        QTabWidget::pane {{
+            border: none;
+            background: {bg};
+        }}
+        QScrollArea {{
+            border: none;
+            background: transparent;
+        }}
+        
+        QScrollArea > QWidget > QWidget {{
+            border-radius: 10px;
+        }}
+        
+        QScrollArea::viewport {{
+            background: transparent;
+            border-radius: 10px;
+        }}
+        
         """)
+
+        self.icon_color_value = icon
         self.update_navbar_icons(active, inactive)
         self.update_toolbar_icons()
         if hasattr(self.training_view, "update_info_icon"):
             self.training_view.update_info_icon(inactive)
+        if hasattr(self.dict_screen, "update_bin_icon"):
+            self.dict_screen.update_bin_icon(inactive)
         if self.current_dictionary_screen:
             self.current_dictionary_screen.update_icons(self.current_theme)

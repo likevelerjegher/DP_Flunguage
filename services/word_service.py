@@ -23,3 +23,6 @@ class WordService:
 
     def update_word(self, word_id, data):
         self.word_repo.update(word_id, data)
+
+    def update_stats(self, word_id, is_correct, time_spent):
+        self.word_repo.update_stats(word_id, is_correct, time_spent)

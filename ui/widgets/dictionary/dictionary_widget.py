@@ -2,13 +2,14 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTabWidget,
     QPushButton, QLabel, QFrame, QHBoxLayout, QMessageBox, QTableWidget, QTableWidgetItem, QAbstractItemView,
-    QHeaderView, QLineEdit
+    QHeaderView, QLineEdit, QSizePolicy
 )
 
 from ui.utils.constants import DIFFICULTY_MAP
 from ui.widgets.dialogs.create_dictionary_dialog import CreateDictionaryDialog
 from ui.widgets.dialogs.create_word_dialog import CreateWordDialog
 from ui.widgets.dialogs.edit_word_dialog import EditWordDialog
+import qtawesome as qta
 
 
 class DictionaryWidget(QWidget):
@@ -49,42 +50,102 @@ class DictionaryWidget(QWidget):
     def setup_dict_tab(self):
         self.clear_layout(self.dict_layout)
 
+        # ===== BUTTON ADD =====
         btn_add = QPushButton("Добавить словарь")
         btn_add.clicked.connect(self.add_dictionary)
         self.dict_layout.addWidget(btn_add)
 
+        # ===== SCROLL AREA SETUP =====
+        from PyQt6.QtWidgets import QScrollArea, QWidget, QSizePolicy
+
+        self.dict_container = QWidget()
+        self.dict_container.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum
+        )
+
+        self.dict_inner_layout = QVBoxLayout(self.dict_container)
+        self.dict_inner_layout.setContentsMargins(0, 0, 0, 0)
+        self.dict_inner_layout.setSpacing(10)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.dict_container)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.dict_layout.addWidget(scroll)
+
+        # ===== DATA =====
         dictionaries = self.service.get_all_dictionaries()
 
         if not dictionaries:
-            self.dict_layout.addWidget(QLabel("Словари отсутствуют"))
+            self.dict_inner_layout.addWidget(QLabel("Словари отсутствуют"))
             return
 
+        # ===== CARDS =====
         for d in dictionaries:
             card = QFrame()
+            card.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Maximum
+            )
+            card.setStyleSheet("""
+                QFrame {
+                    border: 1px solid #333;
+                    border-radius: 8px;
+                    background-color: transparent;
+                }
+            """)
 
-            layout = QHBoxLayout()
+            layout = QVBoxLayout()
+            layout.setContentsMargins(12, 10, 12, 10)
+            layout.setSpacing(6)
 
-            # имя (кликабельное)
+            # ===== TOP ROW =====
+            top_row = QHBoxLayout()
+
             btn = QPushButton(d["name"])
-            btn.setStyleSheet("text-align: left; background: transparent; border: none;")
-            btn.clicked.connect(lambda _, id=d["id"]: self.main_window.open_dictionary(id))
+            btn.setStyleSheet("""
+                text-align: left;
+                background: transparent;
+                border: none;
+            """)
+            btn.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Fixed
+            )
 
-            # инфо
+            btn.clicked.connect(
+                lambda _, id=d["id"]: self.main_window.open_dictionary(id)
+            )
+
+            delete_btn = QPushButton()
+            delete_btn.setIcon(qta.icon('fa5s.trash', color=self.main_window.icon_color()))
+            delete_btn.setFixedWidth(40)
+            delete_btn.clicked.connect(
+                lambda _, id=d["id"]: self.delete_dictionary_confirm(id)
+            )
+
+            top_row.addWidget(btn)
+            top_row.addStretch()
+            top_row.addWidget(delete_btn)
+
+            # ===== DESCRIPTION =====
             info = QLabel(d["description"] or "")
+            info.setWordWrap(True)
+            info.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             info.setStyleSheet("opacity: 0.7;")
 
-            # мусорка справа
-            delete_btn = QPushButton("🗑")
-            delete_btn.setFixedWidth(40)
-            delete_btn.clicked.connect(lambda _, id=d["id"]: self.delete_dictionary_confirm(id))
-
-            layout.addWidget(btn)
+            # ===== BUILD CARD =====
+            layout.addLayout(top_row)
             layout.addWidget(info)
-            layout.addStretch()
-            layout.addWidget(delete_btn)
 
             card.setLayout(layout)
-            self.dict_layout.addWidget(card)
+
+            self.dict_inner_layout.addWidget(card)
+
+        # ===== PUSH ITEMS UP =====
+        self.dict_inner_layout.addStretch()
 
     def setup_words_tab(self):
         self.clear_layout(self.words_layout)
@@ -311,3 +372,4 @@ class DictionaryWidget(QWidget):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+
