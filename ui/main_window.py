@@ -7,11 +7,12 @@ import qtawesome as qta
 import json
 
 from ui.nav_button import NavButton
-from ui.widgets.training.training_widget import TrainingWidget
+from services.training_service import TrainingService
 from ui.widgets.dictionary.dictionary_widget import DictionaryWidget
 from ui.widgets.statictics.statistics_widget import StatisticsWidget
 from ui.settings_dialog import SettingsDialog
 from ui.widgets.dictionary.dictionary_detail_widget import DictionaryDetailWidget
+from ui.widgets.training.training_widget import TrainingWidget
 
 
 class MainWindow(QMainWindow):
@@ -19,7 +20,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.word_service = word_service
         self.service = dictionary_service
-
+        self.training_service = TrainingService(
+            self.word_service,
+            self.service,  # dictionary_service
+            None  # repo пока можно None
+        )
         self.current_theme = "dark"
         self.font_size = 14
 
@@ -37,7 +42,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
 
         self.dict_screen = DictionaryWidget(self.service, self)
-        self.training_view = TrainingWidget()
+        self.training_view = TrainingWidget(self.training_service)
         self.statistics_view = StatisticsWidget()
 
         self.stack.addWidget(self.dict_screen)
@@ -82,7 +87,7 @@ class MainWindow(QMainWindow):
         self.settings_action.triggered.connect(self.open_settings)
         toolbar.addAction(self.settings_action)
 
-        # 🎨 применяем стиль
+        #  применяем стиль
         self.apply_theme("dark")
         self.load_settings()
 
@@ -183,7 +188,8 @@ class MainWindow(QMainWindow):
         self.current_dictionary_screen = screen
         self.current_dictionary_id = dictionary_id
 
-        self.stack.setCurrentWidget(screen)
+        # применяем тему сразу
+        screen.update_icons(self.current_theme)
 
     def go_to_dictionaries(self):
         self.dict_screen.refresh()
@@ -324,3 +330,7 @@ class MainWindow(QMainWindow):
         """)
         self.update_navbar_icons(active, inactive)
         self.update_toolbar_icons()
+        if hasattr(self.training_view, "update_info_icon"):
+            self.training_view.update_info_icon(inactive)
+        if self.current_dictionary_screen:
+            self.current_dictionary_screen.update_icons(self.current_theme)

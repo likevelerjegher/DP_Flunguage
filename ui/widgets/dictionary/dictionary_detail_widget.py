@@ -65,14 +65,9 @@ class DictionaryDetailWidget(QWidget):
 
         # ---------- КНОПКИ ----------
         self.edit_btn = QPushButton()
-        self.edit_btn.setIcon(qta.icon('fa5s.edit'))
-
         self.save_btn = QPushButton()
-        self.save_btn.setIcon(qta.icon('fa5s.check'))
         self.save_btn.hide()
-
         self.cancel_btn = QPushButton()
-        self.cancel_btn.setIcon(qta.icon('fa5s.times'))
         self.cancel_btn.hide()
 
         self.edit_btn.clicked.connect(self.enable_edit)
@@ -176,6 +171,8 @@ class DictionaryDetailWidget(QWidget):
             new_name,
             new_desc
         )
+
+        self.main_window.training_view.reload_dictionaries()
 
         # обновляем локально
 
@@ -404,3 +401,13 @@ class DictionaryDetailWidget(QWidget):
         self.load_dictionary_info()
         self.load_words()
         self.setup_buttons()
+
+    def update_icons(self, theme: str):
+        if theme == "dark":
+            color = "#BBBBBB"
+        else:
+            color = "#444444"
+
+        self.edit_btn.setIcon(qta.icon('fa5s.edit', color=color))
+        self.save_btn.setIcon(qta.icon('fa5s.check', color=color))
+        self.cancel_btn.setIcon(qta.icon('fa5s.times', color=color))
