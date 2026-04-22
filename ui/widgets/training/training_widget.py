@@ -296,3 +296,27 @@ class TrainingWidget(QWidget):
 
         self.source_box.blockSignals(False)
         self.update_limit()
+
+    def reload_dictionaries(self):
+        self.source_box.blockSignals(True)
+
+        current = self.source_box.currentData()
+
+        self.source_box.clear()
+        self.source_box.addItem("Все слова", {"type": "all", "id": None})
+
+        for d in self.training_service.dict_service.get_all_dictionaries():
+            self.source_box.addItem(
+                d["name"],
+                {"type": "dictionary", "id": d["id"]}
+            )
+
+        # восстановить выбор
+        if current:
+            for i in range(self.source_box.count()):
+                if self.source_box.itemData(i) == current:
+                    self.source_box.setCurrentIndex(i)
+                    break
+
+        self.source_box.blockSignals(False)
+        self.update_limit()

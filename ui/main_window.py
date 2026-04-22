@@ -6,12 +6,14 @@ from PyQt6.QtGui import QAction
 import qtawesome as qta
 import json
 
+from repositories.training_repository import TrainingRepository
+from services.data_storage_service import DataStorageService
 from ui.nav_button import NavButton
 from services.training_service import TrainingService
 from ui.widgets.dictionary.dictionary_widget import DictionaryWidget
-from ui.widgets.statictics.statistics_widget import StatisticsWidget
 from ui.settings_dialog import SettingsDialog
 from ui.widgets.dictionary.dictionary_detail_widget import DictionaryDetailWidget
+from ui.widgets.statictics.stat_widget import StatWidget
 from ui.widgets.training.training_widget import TrainingWidget
 
 
@@ -21,10 +23,13 @@ class MainWindow(QMainWindow):
         self.icon_color_value = "#BBBBBB"
         self.word_service = word_service
         self.service = dictionary_service
+        self.storage = DataStorageService("app.db")
+        self.training_repo = TrainingRepository(self.storage)
+
         self.training_service = TrainingService(
             self.word_service,
-            self.service,  # dictionary_service
-            None  # repo пока можно None
+            self.service,
+            self.training_repo
         )
         self.current_theme = "dark"
         self.font_size = 14
@@ -44,7 +49,7 @@ class MainWindow(QMainWindow):
 
         self.dict_screen = DictionaryWidget(self.service, self)
         self.training_view = TrainingWidget(self.training_service)
-        self.statistics_view = StatisticsWidget()
+        self.statistics_view = StatWidget(self.training_repo)
 
         self.stack.addWidget(self.dict_screen)
         self.stack.addWidget(self.training_view)
@@ -76,7 +81,10 @@ class MainWindow(QMainWindow):
         main_widget.setLayout(self.layout)
 
         # обработка кликов
-        self.btn_dictionary.mousePressEvent = lambda e: self.go_to_dictionaries()
+        self.btn_dictionary.mousePressEvent = lambda e: self.switch_screen(0)
+
+        # self.btn_dictionary.mousePressEvent = lambda e: self.go_to_dictionaries()
+
         self.btn_training.mousePressEvent = lambda e: self.switch_screen(1)
         self.btn_stats.mousePressEvent = lambda e: self.switch_screen(2)
 
@@ -100,7 +108,8 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         if index == 0:
             self.dict_screen.refresh()
-
+        if index == 2:
+            self.statistics_view.load_stats()
         if self.current_theme == "dark":
             active = "#4CAF50"
             inactive = "#BBBBBB"

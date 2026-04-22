@@ -93,3 +93,14 @@ class WordRepository:
                 SET wrong_count = COALESCE(wrong_count, 0) + 1
                 WHERE id = ?
             """, (word_id,))
+
+    def update_word_stats(self, word_id, correct_count, wrong_count):
+        cursor = self.storage.conn.cursor()
+
+        cursor.execute("""
+            UPDATE words
+            SET correct_count = ?, wrong_count = ?
+            WHERE id = ?
+        """, (correct_count, wrong_count, word_id))
+
+        self.storage.conn.commit()

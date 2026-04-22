@@ -48,19 +48,22 @@ def init_db():
         dictionary_id INTEGER,
         date TEXT,
         score INTEGER,
-        duration INTEGER
+        duration INTEGER,
+        words_count INTEGER
     )
     """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS training_stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            word_id INTEGER,
-            time_sec REAL,
-            is_correct INTEGER,
-            created_at TEXT
-        )
-        """)
+    CREATE TABLE IF NOT EXISTS training_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER,
+        word_id INTEGER,
+        time_sec REAL,
+        is_correct INTEGER,
+        created_at TEXT,
+        FOREIGN KEY(session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+    )
+    """)
 
     conn.commit()
     conn.close()
