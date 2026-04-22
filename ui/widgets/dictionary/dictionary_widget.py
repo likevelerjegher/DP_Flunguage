@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QHeaderView, QLineEdit, QSizePolicy
 )
 
+from ui.styles.button_styles import primary_button_style, danger_button_style
 from ui.utils.constants import DIFFICULTY_MAP
 from ui.widgets.dialogs.create_dictionary_dialog import CreateDictionaryDialog
 from ui.widgets.dialogs.create_word_dialog import CreateWordDialog
@@ -51,9 +52,12 @@ class DictionaryWidget(QWidget):
         self.clear_layout(self.dict_layout)
 
         # ===== BUTTON ADD =====
-        btn_add = QPushButton("Добавить словарь")
-        btn_add.clicked.connect(self.add_dictionary)
-        self.dict_layout.addWidget(btn_add)
+        self.btn_add_dict = QPushButton("Добавить словарь")
+        self.btn_add_dict.setStyleSheet(
+            primary_button_style(self.main_window.current_theme == "dark")
+        )
+        self.btn_add_dict.clicked.connect(self.add_dictionary)
+        self.dict_layout.addWidget(self.btn_add_dict)
 
         # ===== SCROLL AREA SETUP =====
         from PyQt6.QtWidgets import QScrollArea, QWidget, QSizePolicy
@@ -191,14 +195,20 @@ class DictionaryWidget(QWidget):
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(8)
 
-        btn_add = QPushButton("Добавить слово")
-        btn_add.clicked.connect(self.add_word_global)
+        self.btn_add_word = QPushButton("Добавить слово")
+        self.btn_add_word.setStyleSheet(
+            primary_button_style(self.main_window.current_theme == "dark")
+        )
+        self.btn_add_word.clicked.connect(self.add_word_global)
 
-        btn_delete = QPushButton("Удалить выбранные слова")
-        btn_delete.clicked.connect(self.delete_selected_words)
+        self.btn_delete_words = QPushButton("Удалить выбранные слова")
+        self.btn_delete_words.setStyleSheet(
+            danger_button_style(self.main_window.current_theme == "dark")
+        )
+        self.btn_delete_words.clicked.connect(self.delete_selected_words)
 
-        btn_layout.addWidget(btn_add)
-        btn_layout.addWidget(btn_delete)
+        btn_layout.addWidget(self.btn_add_word)
+        btn_layout.addWidget(self.btn_delete_words)
         btn_layout.addStretch()
 
         self.words_layout.addWidget(btn_container)
@@ -373,3 +383,9 @@ class DictionaryWidget(QWidget):
             if widget:
                 widget.deleteLater()
 
+    def update_theme(self):
+        dark = self.main_window.current_theme == "dark"
+
+        self.btn_add_dict.setStyleSheet(primary_button_style(dark))
+        self.btn_add_word.setStyleSheet(primary_button_style(dark))
+        self.btn_delete_words.setStyleSheet(danger_button_style(dark))

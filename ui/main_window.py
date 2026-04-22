@@ -396,3 +396,8 @@ class MainWindow(QMainWindow):
             self.dict_screen.update_bin_icon(inactive)
         if self.current_dictionary_screen:
             self.current_dictionary_screen.update_icons(self.current_theme)
+        if hasattr(self.statistics_view, "load_chart"):
+            self.statistics_view.load_chart()
+        self.statistics_view.update_theme(self.current_theme)
+        if self.dict_screen:
+            self.dict_screen.update_theme()

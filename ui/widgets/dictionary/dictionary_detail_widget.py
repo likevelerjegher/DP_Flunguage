@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QFrame, QLineEdit
 )
 
+from ui.styles.button_styles import primary_button_style, danger_button_style
 from ui.utils.constants import DIFFICULTY_MAP
 from ui.widgets.dialogs.add_word_to_directory_dialog import AddWordToDictionaryDialog
 from ui.widgets.dialogs.create_word_dialog import CreateWordDialog
@@ -326,20 +327,21 @@ class DictionaryDetailWidget(QWidget):
     def setup_buttons(self):
         # ================= BUTTON PANEL =================
         btn_container = QWidget()
-        btn_container.setObjectName("buttonPanel")
+        dark = self.main_window.current_theme == "dark"
+        self.btn_add = QPushButton("Добавить слово")
+        self.btn_add.setStyleSheet(primary_button_style(dark))
+        self.btn_add.clicked.connect(self.add_word)
 
         btn_layout = QHBoxLayout(btn_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(8)
 
-        btn_add = QPushButton("Добавить слово")
-        btn_add.clicked.connect(self.add_word)
+        self.btn_delete = QPushButton("Удалить выбранные")
+        self.btn_delete.setStyleSheet(danger_button_style(dark))
+        self.btn_delete.clicked.connect(self.delete_selected)
 
-        btn_delete = QPushButton("Удалить выбранные")
-        btn_delete.clicked.connect(self.delete_selected)
-
-        btn_layout.addWidget(btn_add)
-        btn_layout.addWidget(btn_delete)
+        btn_layout.addWidget(self.btn_add)
+        btn_layout.addWidget(self.btn_delete)
         btn_layout.addStretch()
 
         self.layout.addWidget(btn_container)
@@ -411,3 +413,9 @@ class DictionaryDetailWidget(QWidget):
         self.edit_btn.setIcon(qta.icon('fa5s.edit', color=color))
         self.save_btn.setIcon(qta.icon('fa5s.check', color=color))
         self.cancel_btn.setIcon(qta.icon('fa5s.times', color=color))
+
+    def update_theme(self):
+        dark = self.main_window.current_theme == "dark"
+
+        self.btn_add.setStyleSheet(primary_button_style(dark))
+        self.btn_delete.setStyleSheet(danger_button_style(dark))

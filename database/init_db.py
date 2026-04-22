@@ -49,7 +49,8 @@ def init_db():
         date TEXT,
         score INTEGER,
         duration INTEGER,
-        words_count INTEGER
+        words_count INTEGER,
+        mode TEXT
     )
     """)
 
@@ -64,7 +65,14 @@ def init_db():
         FOREIGN KEY(session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
     )
     """)
-
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS word_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_id INTEGER NOT NULL,
+            is_correct INTEGER NOT NULL,
+            answered_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
 

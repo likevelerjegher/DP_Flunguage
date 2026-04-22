@@ -64,6 +64,12 @@ class TrainingWidget(QWidget):
         self.start_panel.addLayout(mode_header)
         self.start_panel.addWidget(self.mode_box)
 
+        self.status_box = QComboBox()
+        self.status_box.addItems(["all", "good", "medium", "bad"])
+
+        self.start_panel.addWidget(QLabel("Тип слов"))
+        self.start_panel.addWidget(self.status_box)
+
         self.start_panel.addWidget(QLabel("Источник"))
         self.start_panel.addWidget(self.source_box)
 
@@ -195,36 +201,28 @@ class TrainingWidget(QWidget):
     def start_training(self):
         mode = self.mode_box.currentText()
         use_stats = self.stats_yes.isChecked()
+
         data = self.source_box.currentData()
         source_type = data["type"]
         source_id = data["id"]
 
-        words = self.get_words(source_type, source_id)
+        status = self.status_box.currentText()
+        limit = self.limit_box.value()
+
+        words = self.training_service._load_words(source_type, source_id)
         count = len(words)
 
-        # логика ошибки
+        count = len(words)
+
         if count < 2:
             QMessageBox.warning(
                 self,
-                "Ошибка",
-                "Недостаточно слов!\n\n"
-                "Для начала тренировки необходимо минимум 2 слова.\n"
+                "Нет слов",
+                "Нет слов для выбранного фильтра\n"
+                "или их меньше 2"
             )
             return
 
-        limit = self.limit_box.value()
-
-        # защита лимита
-        if limit < 2:
-            QMessageBox.warning(
-                self,
-                "Ошибка",
-                "Недостаточно слов!\n\n"
-                "Для начала тренировки необходимо минимум 2 слова.\n"
-            )
-            return
-
-        # защита от переполнения
         if limit > count:
             QMessageBox.warning(
                 self,
@@ -233,13 +231,22 @@ class TrainingWidget(QWidget):
             )
             return
 
-        self.training_service.start_session(
+        success = self.training_service.start_session(
             mode,
             source_type,
             source_id,
             limit,
-            use_stats
+            use_stats,
+            status
         )
+
+        if not success:
+            QMessageBox.information(
+                self,
+                "Нет слов",
+                "С заданными фильтрами нет слов\nили их меньше 2"
+            )
+            return
 
         dialog = TrainingSessionDialog(self.training_service)
         dialog.exec()
@@ -252,7 +259,11 @@ class TrainingWidget(QWidget):
         source_type = data["type"]
         source_id = data["id"]
 
-        words = self.get_words(source_type, source_id)
+        status = self.status_box.currentText()
+
+        words = self.training_service._load_words(source_type, source_id)
+        words = self.training_service._apply_status_filter(words, status)
+
         count = len(words)
 
         if count < 2:
@@ -288,30 +299,6 @@ class TrainingWidget(QWidget):
             )
 
         # восстановить выбор (если возможно)
-        if current:
-            for i in range(self.source_box.count()):
-                if self.source_box.itemData(i) == current:
-                    self.source_box.setCurrentIndex(i)
-                    break
-
-        self.source_box.blockSignals(False)
-        self.update_limit()
-
-    def reload_dictionaries(self):
-        self.source_box.blockSignals(True)
-
-        current = self.source_box.currentData()
-
-        self.source_box.clear()
-        self.source_box.addItem("Все слова", {"type": "all", "id": None})
-
-        for d in self.training_service.dict_service.get_all_dictionaries():
-            self.source_box.addItem(
-                d["name"],
-                {"type": "dictionary", "id": d["id"]}
-            )
-
-        # восстановить выбор
         if current:
             for i in range(self.source_box.count()):
                 if self.source_box.itemData(i) == current:

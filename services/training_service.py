@@ -11,22 +11,19 @@ class TrainingService:
         self.session = None
         self.words_queue = []
 
-    def start_session(self, mode, source_type, source_id, limit, use_stats):
-        # ===== слова =====
-        if source_type == "all":
-            words = self.word_service.get_all_words()
-        else:
-            words = self.dict_service.get_words(source_id)
+    def start_session(self, mode, source_type, source_id, limit, use_stats, status="all"):
 
-        if not words:
-            self.words_queue = []
-            return
+        words = self._load_words(source_type, source_id)
+        words = self._apply_status_filter(words, status)
+
+        if len(words) < 2:
+            return False
 
         random.shuffle(words)
+
         limit = min(limit, len(words))
         self.words_queue = words[:limit]
 
-        # ===== сессия =====
         session_id = None
         if use_stats:
             session_id = self.repo.create_session(source_id)
@@ -40,8 +37,37 @@ class TrainingService:
             "correct": 0,
             "use_stats": use_stats,
             "started_at": datetime.now(),
-            "session_id": session_id
+            "session_id": session_id,
+            "status_filter": status
         }
+
+        return True
+
+    def get_word_status(self, word):
+        word = self._to_dict(word)
+
+        correct = word.get("correct_count", 0)
+        wrong = word.get("wrong_count", 0)
+
+        total = correct + wrong
+
+        recent = self.repo.get_recent_answers(word["id"])
+        recent = recent[-5:]
+
+        recent_score = sum(recent) / len(recent) if recent else 0
+        accuracy = correct / total if total > 0 else 0
+
+        if total < 5 or accuracy < 0.6:
+            return "bad"
+
+        if (
+                accuracy >= 0.85 and
+                total >= 10 and
+                recent_score >= 0.8
+        ):
+            return "good"
+
+        return "medium"
 
     def get_next_task(self):
         if not self.words_queue:
@@ -49,7 +75,7 @@ class TrainingService:
 
         word = self.words_queue.pop(0)
 
-        # 👉 считаем здесь, а не в UI
+        # считаем здесь, а не в UI
         self.session["completed"] += 1
 
         mode = self.session["mode"]
@@ -93,33 +119,39 @@ class TrainingService:
         return is_correct
 
     def update_word(self, word, is_correct: bool):
-        # простая версия (потом заменим на нейронку)
+        word["correct_count"] = word.get("correct_count", 0)
+        word["wrong_count"] = word.get("wrong_count", 0)
+
+        if "recent_answers" not in word:
+            word["recent_answers"] = []
 
         if is_correct:
-            word["correct_count"] = word.get("correct_count", 0) + 1
+            word["correct_count"] += 1
+            word["recent_answers"].append(1)
         else:
-            word["wrong_count"] = word.get("wrong_count", 0) + 1
+            word["wrong_count"] += 1
+            word["recent_answers"].append(0)
+
+        # ограничиваем память истории
+        word["recent_answers"] = word["recent_answers"][-10:]
 
     def update_progress(self, word, is_correct, time_spent):
-        if is_correct:
+        if self.session and is_correct:
             self.session["correct"] += 1
 
-        correct_count = word["correct_count"] if "correct_count" in word.keys() else 0
-        wrong_count = word["wrong_count"] if "wrong_count" in word.keys() else 0
+        # обновляем локально через update_word
+        self.update_word(word, is_correct)
 
-        if is_correct:
-            correct_count += 1
-        else:
-            wrong_count += 1
+        self.repo.save_word_history(word["id"], is_correct)
 
         if self.repo:
             self.repo.update_word_stats(
                 word["id"],
-                correct_count,
-                wrong_count
+                word["correct_count"],
+                word["wrong_count"]
             )
 
-        if self.repo and self.session["use_stats"]:
+        if self.repo and self.session and self.session["use_stats"]:
             self.repo.save_stat(
                 self.session["session_id"],
                 word["id"],
@@ -128,6 +160,9 @@ class TrainingService:
             )
 
     def finish_session(self):
+        if not self.session:
+            return
+
         if not self.session["use_stats"]:
             return
 
@@ -141,5 +176,32 @@ class TrainingService:
             self.session["session_id"],
             total,
             score,
-            duration
+            duration,
+            self.session["mode"]
         )
+
+    def get_filtered_words(self, source_type, source_id, status="all"):
+        if source_type == "all":
+            words = self.word_service.get_all_words()
+        else:
+            words = self.dict_service.get_words(source_id)
+
+        if status != "all":
+            words = [w for w in words if self.get_word_status(w) == status]
+
+        return words
+
+    def _load_words(self, source_type, source_id):
+        if source_type == "all":
+            return self.word_service.get_all_words()
+        else:
+            return self.dict_service.get_words(source_id)
+
+    def _apply_status_filter(self, words, status):
+        if status == "all":
+            return words
+
+        return [w for w in words if self.get_word_status(w) == status]
+
+    def _to_dict(self, word):
+        return dict(word)

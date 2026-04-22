@@ -44,12 +44,12 @@ class TrainingRepository:
             datetime.now().isoformat()
         ))
 
-    def finish_session(self, session_id, words_count, score, duration):
+    def finish_session(self, session_id, words_count, score, duration, mode):
         self.storage.execute("""
             UPDATE training_sessions
-            SET words_count = ?, score = ?, duration = ?
+            SET words_count = ?, score = ?, duration = ?, mode = ?
             WHERE id = ?
-        """, (words_count, score, duration, session_id))
+        """, (words_count, score, duration, mode, session_id))
 
     def get_general_stats(self):
         cursor = self.storage.conn.cursor()
@@ -80,7 +80,7 @@ class TrainingRepository:
         cursor = self.storage.conn.cursor()
 
         cursor.execute("""
-            SELECT id, date, words_count, score, duration
+            SELECT id, date, mode, words_count, score, duration
             FROM training_sessions
             ORDER BY date DESC
             LIMIT ?
@@ -159,3 +159,67 @@ class TrainingRepository:
         """)
 
         self.storage.conn.commit()
+
+    def get_word_groups_stats(self):
+        cursor = self.storage.conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                SUM(CASE WHEN wrong_count <= 1 THEN 1 ELSE 0 END) as good,
+                SUM(CASE WHEN wrong_count BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as medium,
+                SUM(CASE WHEN wrong_count > 3 THEN 1 ELSE 0 END) as bad
+            FROM words
+        """)
+
+        good, medium, bad = cursor.fetchone()
+
+        return {
+            "good": good or 0,
+            "medium": medium or 0,
+            "bad": bad or 0
+        }
+
+    def get_words_with_status(self, limit=50):
+        cursor = self.storage.conn.cursor()
+
+        cursor.execute("""
+            SELECT 
+                original,
+                correct_count,
+                wrong_count,
+                CASE 
+                    WHEN (correct_count + wrong_count) < 3 THEN 'medium'
+                    WHEN (correct_count * 1.0 / (correct_count + wrong_count)) >= 0.85 THEN 'good'
+                    WHEN (correct_count * 1.0 / (correct_count + wrong_count)) >= 0.6 THEN 'medium'
+                    ELSE 'bad'
+                END as status
+            FROM words
+            ORDER BY (wrong_count - correct_count) DESC
+            LIMIT ?
+        """, (limit,))
+
+        return cursor.fetchall()
+
+    def get_words_count(self):
+        cursor = self.storage.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM words")
+        return cursor.fetchone()[0]
+
+    def save_word_history(self, word_id, is_correct):
+        self.storage.conn.execute("""
+            INSERT INTO word_history (word_id, is_correct)
+            VALUES (?, ?)
+        """, (word_id, int(is_correct)))
+
+        self.storage.conn.commit()
+
+    def get_recent_answers(self, word_id, limit=5):
+        rows = self.storage.conn.execute("""
+            SELECT is_correct
+            FROM word_history
+            WHERE word_id = ?
+            ORDER BY answered_at DESC
+            LIMIT ?
+        """, (word_id, limit)).fetchall()
+
+        return [r[0] for r in rows]
