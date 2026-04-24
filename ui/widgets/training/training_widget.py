@@ -65,8 +65,7 @@ class TrainingWidget(QWidget):
         self.start_panel.addWidget(self.mode_box)
 
         self.status_box = QComboBox()
-        self.status_box.addItems(["all", "good", "medium", "bad"])
-
+        self.status_box.addItems(["all", "new", "good", "medium", "bad"])
         self.start_panel.addWidget(QLabel("Тип слов"))
         self.start_panel.addWidget(self.status_box)
 
@@ -210,6 +209,8 @@ class TrainingWidget(QWidget):
         limit = self.limit_box.value()
 
         words = self.training_service._load_words(source_type, source_id)
+        words = self.training_service._apply_status_filter(words, status)
+
         count = len(words)
 
         count = len(words)

@@ -1,5 +1,6 @@
 import random
 from datetime import datetime
+from ml.recommender import WordRecommender
 
 
 class TrainingService:
@@ -10,10 +11,17 @@ class TrainingService:
 
         self.session = None
         self.words_queue = []
+        self.recommender = WordRecommender()
 
     def start_session(self, mode, source_type, source_id, limit, use_stats, status="all"):
 
-        words = self._load_words(source_type, source_id)
+        words = [dict(w) for w in self._load_words(source_type, source_id)]
+
+        has_progress = any(
+            (w.get("correct_count", 0) + w.get("wrong_count", 0)) > 0
+            for w in words
+        )
+
         words = self._apply_status_filter(words, status)
 
         if len(words) < 2:
@@ -44,14 +52,23 @@ class TrainingService:
         return True
 
     def get_word_status(self, word):
-        word = self._to_dict(word)
+        word = dict(word)
 
-        correct = word.get("correct_count", 0)
-        wrong = word.get("wrong_count", 0)
+        word_id = word.get("id")
+        if word_id is None:
+            return "medium"
 
+        correct = int(word.get("correct_count") or 0)
+        wrong = int(word.get("wrong_count") or 0)
         total = correct + wrong
 
-        recent = self.repo.get_recent_answers(word["id"])
+        history_count = self.repo.get_answers_count(word_id) if self.repo else 0
+
+        # new — только если по слову вообще еще не было ответов
+        if history_count == 0:
+            return "new"
+
+        recent = self.repo.get_recent_answers(word_id) if self.repo else []
         recent = recent[-5:]
 
         recent_score = sum(recent) / len(recent) if recent else 0
@@ -60,11 +77,7 @@ class TrainingService:
         if total < 5 or accuracy < 0.6:
             return "bad"
 
-        if (
-                accuracy >= 0.85 and
-                total >= 10 and
-                recent_score >= 0.8
-        ):
+        if accuracy >= 0.85 and total >= 10 and recent_score >= 0.8:
             return "good"
 
         return "medium"
@@ -119,6 +132,8 @@ class TrainingService:
         return is_correct
 
     def update_word(self, word, is_correct: bool):
+        word = dict(word) # защита
+
         word["correct_count"] = word.get("correct_count", 0)
         word["wrong_count"] = word.get("wrong_count", 0)
 
@@ -132,14 +147,14 @@ class TrainingService:
             word["wrong_count"] += 1
             word["recent_answers"].append(0)
 
-        # ограничиваем память истории
         word["recent_answers"] = word["recent_answers"][-10:]
 
     def update_progress(self, word, is_correct, time_spent):
+        word = dict(word)  # ВАЖНО — защита от sqlite3.Row
+
         if self.session and is_correct:
             self.session["correct"] += 1
 
-        # обновляем локально через update_word
         self.update_word(word, is_correct)
 
         self.repo.save_word_history(word["id"], is_correct)
@@ -201,7 +216,49 @@ class TrainingService:
         if status == "all":
             return words
 
-        return [w for w in words if self.get_word_status(w) == status]
+        result = []
+
+        for w in words:
+            w_dict = dict(w)
+            if self.get_word_status(w_dict) == status:
+                result.append(w)
+
+        return result
 
     def _to_dict(self, word):
         return dict(word)
+
+    def get_recommended_words(self, limit=10):
+        good, bad = self.get_recommendation_data()
+        return self.recommender.recommend(good, bad, limit)
+
+    def get_recommendation_data(self):
+        words = self.word_service.get_all_words()
+
+        good = []
+        bad = []
+
+        for w in words:
+            status = self.get_word_status(w)
+
+            text = self.get_word_text(w)
+
+            if not text:
+                continue
+
+            if status == "good":
+                good.append(text)
+
+            elif status == "bad":
+                bad.append(text)
+
+        return good, bad
+
+    def get_word_text(self, w):
+        if isinstance(w, dict):
+            return w.get("word") or w.get("original")
+
+        try:
+            return w["word"]
+        except Exception:
+            return w["original"]

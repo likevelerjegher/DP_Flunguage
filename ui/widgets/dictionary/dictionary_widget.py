@@ -28,6 +28,7 @@ class DictionaryWidget(QWidget):
 
         self.dict_tab = QWidget()
         self.words_tab = QWidget()
+        self.recommend_tab = QWidget()
 
         self.all_words = []
         self.filtered_words = []
@@ -40,13 +41,18 @@ class DictionaryWidget(QWidget):
         self.words_layout = QVBoxLayout()
         self.words_tab.setLayout(self.words_layout)
 
+        self.recommend_layout = QVBoxLayout()
+        self.recommend_tab.setLayout(self.recommend_layout)
+
         self.tabs.addTab(self.dict_tab, "Словари")
         self.tabs.addTab(self.words_tab, "Все слова")
+        self.tabs.addTab(self.recommend_tab, "Рекомендации")
 
         self.layout.addWidget(self.tabs)
 
         self.setup_dict_tab()
         self.setup_words_tab()
+        self.setup_recommend_tab()
 
     def setup_dict_tab(self):
         self.clear_layout(self.dict_layout)
@@ -215,6 +221,66 @@ class DictionaryWidget(QWidget):
 
         # first render
         self.render_words()
+
+    def setup_recommend_tab(self):
+        self.clear_layout(self.recommend_layout)
+
+        title = QLabel("Рекомендованные слова для изучения")
+        self.recommend_layout.addWidget(title)
+
+        self.btn_refresh_recommend = QPushButton("Обновить рекомендации")
+        self.btn_refresh_recommend.clicked.connect(self.load_recommendations)
+
+        self.recommend_layout.addWidget(self.btn_refresh_recommend)
+
+        self.recommend_container = QVBoxLayout()
+        self.recommend_layout.addLayout(self.recommend_container)
+
+        self.load_recommendations()
+
+    def load_recommendations(self):
+        self.clear_layout(self.recommend_container)
+
+        words = self.main_window.training_service.get_recommended_words(limit=15)
+
+        if not words:
+            self.recommend_container.addWidget(QLabel("Нет рекомендаций"))
+            return
+
+        for w in words:
+            card = QFrame()
+            card.setStyleSheet("border: 1px solid #333; border-radius: 6px;")
+
+            layout = QHBoxLayout()
+
+            label = QLabel(
+                f"{w['word']} — {', '.join(w['translation']) if isinstance(w['translation'], list) else w['translation']}")
+
+            btn = QPushButton("Добавить в словарь")
+
+            btn.clicked.connect(
+                lambda _, word=w: self.add_recommended_word(word)
+            )
+
+            layout.addWidget(label)
+            layout.addStretch()
+            layout.addWidget(btn)
+
+            card.setLayout(layout)
+            self.recommend_container.addWidget(card)
+
+    def add_recommended_word(self, word):
+        self.main_window.word_service.create_word({
+            "original": word["word"],
+            "translation": ", ".join(word["translation"]) if isinstance(word["translation"], list) else word[
+                "translation"],
+            "transcription": "",
+            "language": "en",
+            "difficulty": 2
+        })
+
+        QMessageBox.information(self, "Добавлено", "Слово добавлено в словарь")
+        self.refresh()
 
     def render_words(self):
         self.table.setRowCount(len(self.filtered_words))

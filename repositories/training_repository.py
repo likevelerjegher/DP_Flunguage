@@ -5,6 +5,7 @@ class TrainingRepository:
         self.storage = storage
         self.sessions = []
         self.results = []
+        self.training_service = None
 
     def save_session(self, session):
         self.sessions.append(session)
@@ -162,43 +163,74 @@ class TrainingRepository:
 
     def get_word_groups_stats(self):
         cursor = self.storage.conn.cursor()
+        rows = cursor.execute("SELECT * FROM words").fetchall()
 
-        cursor.execute("""
-            SELECT
-                SUM(CASE WHEN wrong_count <= 1 THEN 1 ELSE 0 END) as good,
-                SUM(CASE WHEN wrong_count BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as medium,
-                SUM(CASE WHEN wrong_count > 3 THEN 1 ELSE 0 END) as bad
-            FROM words
-        """)
+        new = good = medium = bad = 0
 
-        good, medium, bad = cursor.fetchone()
+        for w in rows:
+            w = dict(w)
+
+            correct = int(w.get("correct_count") or 0)
+            wrong = int(w.get("wrong_count") or 0)
+            total = correct + wrong
+
+            history_count = self.get_answers_count(w["id"])
+
+            if history_count == 0:
+                new += 1
+                continue
+
+            accuracy = correct / total if total > 0 else 0
+
+            if total < 5 or accuracy < 0.6:
+                bad += 1
+            elif accuracy >= 0.85 and total >= 10:
+                good += 1
+            else:
+                medium += 1
 
         return {
-            "good": good or 0,
-            "medium": medium or 0,
-            "bad": bad or 0
+            "new": new,
+            "good": good,
+            "medium": medium,
+            "bad": bad
         }
 
     def get_words_with_status(self, limit=50):
         cursor = self.storage.conn.cursor()
+        rows = cursor.execute("SELECT * FROM words").fetchall()
 
-        cursor.execute("""
-            SELECT 
-                original,
-                correct_count,
-                wrong_count,
-                CASE 
-                    WHEN (correct_count + wrong_count) < 3 THEN 'medium'
-                    WHEN (correct_count * 1.0 / (correct_count + wrong_count)) >= 0.85 THEN 'good'
-                    WHEN (correct_count * 1.0 / (correct_count + wrong_count)) >= 0.6 THEN 'medium'
-                    ELSE 'bad'
-                END as status
-            FROM words
-            ORDER BY (wrong_count - correct_count) DESC
-            LIMIT ?
-        """, (limit,))
+        result = []
 
-        return cursor.fetchall()
+        for w in rows:
+            w = dict(w)
+
+            correct = int(w.get("correct_count") or 0)
+            wrong = int(w.get("wrong_count") or 0)
+            total = correct + wrong
+
+            history_count = self.get_answers_count(w["id"])
+
+            if history_count == 0:
+                status = "new"
+            else:
+                accuracy = correct / total if total > 0 else 0
+
+                if total < 5 or accuracy < 0.6:
+                    status = "bad"
+                elif accuracy >= 0.85 and total >= 10:
+                    status = "good"
+                else:
+                    status = "medium"
+
+            result.append((
+                w.get("original"),
+                wrong,
+                status
+            ))
+
+        result.sort(key=lambda x: x[1], reverse=True)
+        return result[:limit]
 
     def get_words_count(self):
         cursor = self.storage.conn.cursor()
@@ -223,3 +255,12 @@ class TrainingRepository:
         """, (word_id, limit)).fetchall()
 
         return [r[0] for r in rows]
+
+    def get_answers_count(self, word_id):
+        cursor = self.storage.conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM word_history
+            WHERE word_id = ?
+        """, (word_id,))
+        return cursor.fetchone()[0] or 0

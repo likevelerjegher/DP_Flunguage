@@ -232,21 +232,24 @@ class StatWidget(QWidget):
     def load_chart(self):
         stats = self.training_repo.get_word_groups_stats()
 
+        new = stats["new"]
         good = stats["good"]
         medium = stats["medium"]
         bad = stats["bad"]
 
-        total = good + medium + bad
+        total = new + good + medium + bad
         if total == 0:
             return
 
         values = [
+            new / total * 100,
             good / total * 100,
             medium / total * 100,
             bad / total * 100
         ]
 
         labels = [
+            f"Новые\n{new}",
             f"Хорошо\n{good}",
             f"Средне\n{medium}",
             f"Плохо\n{bad}"
@@ -258,9 +261,9 @@ class StatWidget(QWidget):
         bars = self.ax.bar(labels, values)
 
         colors = (
-            ["#2ecc71", "#f1c40f", "#e74c3c"]
+            ["#3498db", "#2ecc71", "#f1c40f", "#e74c3c"]
             if not self.is_dark_theme()
-            else ["#27ae60", "#f39c12", "#c0392b"]
+            else ["#2980b9", "#27ae60", "#f39c12", "#c0392b"]
         )
 
         for bar, color in zip(bars, colors):
@@ -315,6 +318,14 @@ class StatWidget(QWidget):
 
         # --- Qt canvas background ---
         self.chart.setStyleSheet(f"background-color: {bg};")
+
+        self.ax.title.set_color(text)
+
+        for label in self.ax.get_xticklabels():
+            label.set_color(text)
+
+        for label in self.ax.get_yticklabels():
+            label.set_color(text)
 
     def is_dark_theme(self):
         bg = self.palette().color(QPalette.ColorRole.Window)
