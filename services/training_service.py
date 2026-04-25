@@ -234,22 +234,47 @@ class TrainingService:
     def _to_dict(self, word):
         return dict(word)
 
-    def get_recommended_words(self, limit=10):
-        good, bad = self.get_recommendation_data()
-        recommended_texts = self.recommender.recommend(good, bad, limit)
+    def get_recommended_words(self, limit=15):
+        good_words, bad_words = self.get_recommendation_data()
 
+        print("GOOD:", good_words)
+        print("BAD:", bad_words)
+
+        recommended_words = self.recommender.recommend(
+            good_words,
+            bad_words,
+            top_n=limit
+        )
+
+        # ВАЖНО: превращаем строки → полноценные слова из БД
         all_words = self.word_service.get_all_words()
 
         result = []
 
-        for text in recommended_texts:
-            for w in all_words:
-                word_text = self.get_word_text(w)
+        existing_words = {
+            w["original"].lower().strip()
+            for w in all_words
+        }
 
-                if word_text == text:
-                    result.append(dict(w))
+        for w in recommended_words:
+            found = False
+
+            for db_word in all_words:
+                if db_word["original"].lower().strip() == w:
+                    result.append({
+                        "word": db_word["original"],
+                        "translation": db_word["translation"]
+                    })
+                    found = True
                     break
 
+            # если нет в БД — всё равно показываем
+            if not found:
+                result.append({
+                    "word": w,
+                    "translation": "(рекомендуется)"
+                })
+        print("RECOMMENDED RAW:", recommended_words)
         return result
 
     def get_recommendation_data(self):
@@ -259,8 +284,9 @@ class TrainingService:
         bad = []
 
         for w in words:
-            status = self.get_word_status(w)
+            w = dict(w)  # ВАЖНО
 
+            status = self.get_word_status(w)
             text = self.get_word_text(w)
 
             if not text:
@@ -275,10 +301,4 @@ class TrainingService:
         return good, bad
 
     def get_word_text(self, w):
-        if isinstance(w, dict):
-            return w.get("word") or w.get("original")
-
-        try:
-            return w["word"]
-        except Exception:
-            return w["original"]
+        return (w.get("original") or "").lower().strip()

@@ -1,48 +1,68 @@
+import os
+
+from pathlib import Path
 import numpy as np
 import json
 
 
 class WordRecommender:
     def __init__(self):
-        self.embeddings = np.load("ml/embeddings.npy")
+        base_dir = Path(__file__).resolve().parent
 
-        with open("ml/vocab.json", "r", encoding="utf-8") as f:
-            self.vocab = json.load(f)
+        self.embeddings = np.load(base_dir / "embeddings.npy")
 
-        self.index_to_word = {i: w for w, i in self.vocab.items()}
+        with open(base_dir / "vocab.json", "r", encoding="utf-8") as f:
+            raw_vocab = json.load(f)
+
+        # нормализация vocab
+        self.vocab = {
+            k.strip().lower(): v
+            for k, v in raw_vocab.items()
+        }
+
+        self.index_to_word = {
+            i: w.strip().lower()
+            for w, i in self.vocab.items()
+        }
+
+        print("vocab size:", len(self.vocab))
+        print("embeddings shape:", self.embeddings.shape)
 
     # =========================
     # CORE RECOMMENDATION
     # =========================
+    def _norm(self, w: str):
+        return w.strip().lower()
 
     def recommend(self, good_words, bad_words, top_n=10):
-        """
-        good_words → то, что пользователь знает
-        bad_words → где он ошибается
-        """
+
+        good_words = self._filter_words(good_words)
+        bad_words = self._filter_words(bad_words)
 
         if not good_words:
             return []
 
         user_vector = self._build_user_vector(good_words, bad_words)
-
+        print("good_words:", list(good_words)[:5])
+        print("bad_words:", list(bad_words)[:5])
+        print("user_vector norm:", np.linalg.norm(user_vector))
         scored = []
 
         for i, emb in enumerate(self.embeddings):
-            word = self.index_to_word[i]
 
-            # не рекомендуем уже изученное
+            word = self._norm(self.index_to_word[i])
+
+            # уже изученные не рекомендуем
             if word in good_words:
                 continue
 
-            # базовая похожесть
             sim = self._cosine(user_vector, emb)
-
-            # усиление: если слово похоже на "ошибочные" — поднимаем приоритет
             error_boost = self._error_boost(word, bad_words)
 
-            score = sim + error_boost
+            # добавляем небольшую вариативность
+            noise = np.random.normal(0, 0.01)
 
+            score = sim + error_boost + noise
             scored.append((word, score))
 
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -56,16 +76,23 @@ class WordRecommender:
     def _build_user_vector(self, good_words, bad_words):
         vectors = []
 
-        # хорошие слова дают “правильное знание”
         for w in good_words:
             vec = self._get_vector(w)
             if vec is not None:
                 vectors.append(vec)
 
+        # ВАЖНО: не ноль-вектор
         if not vectors:
-            return np.zeros(self.embeddings.shape[1])
+            return np.mean(self.embeddings, axis=0)
 
-        return np.mean(vectors, axis=0)
+        vec = np.mean(vectors, axis=0)
+
+        # нормализация
+        norm = np.linalg.norm(vec)
+        if norm != 0:
+            vec = vec / norm
+
+        return vec
 
     # =========================
     # ERROR BOOSTING
@@ -101,9 +128,12 @@ class WordRecommender:
     # =========================
 
     def _get_vector(self, word):
+
+        word = self._norm(word)
         idx = self.vocab.get(word)
         if idx is None:
             return None
+
         return self.embeddings[idx]
 
     def _pos_bonus(self, word, good_words, word_meta):
@@ -119,3 +149,10 @@ class WordRecommender:
         if denom == 0:
             return 0
         return np.dot(a, b) / denom
+
+    def _filter_words(self, words):
+        return {
+            self._norm(w)
+            for w in words
+            if w and self._norm(w) in self.vocab
+        }
