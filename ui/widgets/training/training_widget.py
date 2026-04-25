@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from ui.widgets.training.training_sesstion_dialog import TrainingSessionDialog
+from ui.widgets.training.training_session_dialog import TrainingSessionDialog
 import qtawesome as qta
 
 class TrainingWidget(QWidget):
