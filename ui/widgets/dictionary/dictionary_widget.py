@@ -226,9 +226,16 @@ class DictionaryWidget(QWidget):
         self.clear_layout(self.recommend_layout)
 
         title = QLabel("Рекомендованные слова для изучения")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+
         self.recommend_layout.addWidget(title)
+        self.recommend_layout.addSpacing(15)
 
         self.btn_refresh_recommend = QPushButton("Обновить рекомендации")
+        self.btn_refresh_recommend.setStyleSheet(
+            primary_button_style(self.main_window.current_theme == "dark")
+        )
         self.btn_refresh_recommend.clicked.connect(self.load_recommendations)
         self.recommend_layout.addWidget(self.btn_refresh_recommend)
 
@@ -284,12 +291,30 @@ class DictionaryWidget(QWidget):
         self.recommend_container.addStretch()
 
     def add_recommended_word(self, word):
+        existing_words = self.main_window.word_service.get_all_words()
+
+        existing_set = set()
+        for w in existing_words:
+            w = dict(w)
+            existing_set.add((w.get("original") or "").strip().lower())
+            existing_set.add((w.get("word") or "").strip().lower())
+
+        word_text = (word["word"] or "").strip().lower()
+
+        if word_text in existing_set:
+            QMessageBox.warning(
+                self,
+                "Уже добавлено",
+                "Это слово уже есть в словаре"
+            )
+            return
+
         self.main_window.word_service.create_word({
             "original": word["word"],
             "translation": ", ".join(word["translation"]) if isinstance(word["translation"], list) else word[
                 "translation"],
             "transcription": "",
-            "language": "en",
+            "language": "Английский",
             "difficulty": 2
         })
 
@@ -469,3 +494,4 @@ class DictionaryWidget(QWidget):
         self.btn_add_dict.setStyleSheet(primary_button_style(dark))
         self.btn_add_word.setStyleSheet(primary_button_style(dark))
         self.btn_delete_words.setStyleSheet(danger_button_style(dark))
+        self.btn_refresh_recommend.setStyleSheet(primary_button_style(dark))

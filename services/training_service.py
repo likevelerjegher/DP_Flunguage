@@ -12,6 +12,7 @@ class TrainingService:
         self.session = None
         self.words_queue = []
         self.recommender = WordRecommender()
+        self.shown_recommendations = set()
 
     def start_session(self, mode, source_type, source_id, limit, use_stats, status="all"):
 
@@ -134,11 +135,18 @@ class TrainingService:
         return options
 
     def check_answer(self, task, answer):
-        correct = task["answer"].lower().strip()
-        user = answer.lower().strip()
-        is_correct = correct == user
+        user = (answer or "").strip().lower()
 
-        return is_correct
+        correct = task.get("answer", [])
+
+        if isinstance(correct, str):
+            candidates = [c.strip().lower() for c in correct.split(",") if c.strip()]
+        elif isinstance(correct, list):
+            candidates = [str(c).strip().lower() for c in correct if str(c).strip()]
+        else:
+            candidates = []
+
+        return user in candidates
 
     def update_word(self, word, is_correct: bool):
         word.setdefault("correct_count", 0)
@@ -248,7 +256,8 @@ class TrainingService:
         recommended_words = self.recommender.recommend(
             good_words,
             bad_words,
-            top_n=limit
+            top_n=limit * 5,
+            excluded_words=self.shown_recommendations
         )
 
         print("RECOMMENDED RAW:", recommended_words)
@@ -256,17 +265,13 @@ class TrainingService:
         all_words = self.word_service.get_all_words()
 
         db_index = {}
-
         for w in all_words:
-
-            w = dict(w)  #FIX SQLITE ROW -> dict
-
+            w = dict(w)
             key1 = (w.get("original") or "").lower().strip()
             key2 = (w.get("word") or "").lower().strip()
 
             if key1:
                 db_index[key1] = w
-
             if key2:
                 db_index[key2] = w
 
@@ -277,7 +282,6 @@ class TrainingService:
 
             if word_norm in db_index:
                 db_word = db_index[word_norm]
-
                 translations = db_word.get("translations") or db_word.get("translation") or []
                 if isinstance(translations, str):
                     translations = [translations]
@@ -287,18 +291,21 @@ class TrainingService:
                     "translation": translations[:3]
                 })
             else:
-                meta = self.recommender.word_meta.get(word_norm)
+                meta = self.recommender.word_meta.get(word_norm, {})
+                translations = meta.get("translations", [])
+                if isinstance(translations, str):
+                    translations = [translations]
 
-                if meta:
-                    result.append({
-                        "word": meta["word"],
-                        "translation": (meta.get("translations", []) or [])[:3]
-                    })
-                else:
-                    result.append({
-                        "word": word_norm,
-                        "translation": []
-                    })
+                result.append({
+                    "word": meta.get("word", word_norm),
+                    "translation": translations[:3]
+                })
+
+            self.shown_recommendations.add(word_norm)
+
+            if len(result) >= limit:
+                break
+
         return result
 
     def get_recommendation_data(self):

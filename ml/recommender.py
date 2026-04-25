@@ -41,7 +41,7 @@ class WordRecommender:
     def _norm(self, w: str):
         return w.strip().lower()
 
-    def recommend(self, good_words, bad_words, top_n=10):
+    def recommend(self, good_words, bad_words, top_n=10, excluded_words=None):
 
         good_words = {
             self._norm(w["word"])
@@ -51,6 +51,10 @@ class WordRecommender:
         bad_words = {
             self._norm(w["word"])
             for w in bad_words
+        }
+
+        excluded_words = {
+            self._norm(w) for w in (excluded_words or set())
         }
 
         self.bad_words_raw = set(bad_words)
@@ -68,8 +72,7 @@ class WordRecommender:
 
             word = self._norm(self.index_to_word[i])
 
-            # не показываем уже изученные (good + bad)
-            if word in good_words or word in bad_words:
+            if word in good_words or word in bad_words or word in excluded_words:
                 continue
 
             # и дополнительно исключаем bad words
@@ -79,10 +82,7 @@ class WordRecommender:
             sim = self._cosine(user_vector, emb)
             error_boost = self._error_boost(word, bad_words)
 
-            # добавляем небольшую вариативность
-            noise = np.random.normal(0, 0.01)
-
-            score = sim + error_boost + noise
+            score = sim + error_boost
             scored.append((word, score))
 
         scored.sort(key=lambda x: x[1], reverse=True)

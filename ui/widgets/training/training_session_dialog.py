@@ -314,9 +314,11 @@ class TrainingSessionDialog(QDialog):
         self.handle_answer(user_answer)
 
     def check_answer(self):
-        if not self.current_task or self.answered:
+        if not self.current_task:
             return
-        self.handle_answer(self.input.text())
+
+        answer = self.input.text()
+        self.handle_answer(answer)
 
     def handle_answer(self, user_answer):
         is_correct = self.training_service.check_answer(self.current_task, user_answer)

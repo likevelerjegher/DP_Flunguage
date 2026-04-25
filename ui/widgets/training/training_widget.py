@@ -174,12 +174,18 @@ class TrainingWidget(QWidget):
     def select_option(self, option):
         self.process_answer(option)
 
-    def check_answer(self):
-        if not self.current_task:
-            return
+    def check_answer(self, task, user_answer):
+        user_answer = user_answer.strip().lower()
 
-        answer = self.input.text()
-        self.process_answer(answer)
+        answers = task["answer"]
+
+        # всегда превращаем в список
+        if isinstance(answers, str):
+            answers = answers.split(",")
+
+        answers = [a.strip().lower() for a in answers]
+
+        return user_answer in answers
 
     def process_answer(self, user_answer):
         is_correct = self.training_service.check_answer(self.current_task, user_answer)
