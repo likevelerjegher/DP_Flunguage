@@ -222,18 +222,19 @@ class TrainingRepository:
 
             if history == 0:
                 status = "new"
-                wrong = int(w.get("wrong_count") or 0)
+                correct_count = int(w.get("correct_count") or 0)
+                wrong_count = int(w.get("wrong_count") or 0)
             else:
-                correct = int(w.get("correct_count") or 0)
-                wrong = int(w.get("wrong_count") or 0)
-                total = correct + wrong
-                accuracy = correct / total if total > 0 else 0
+                correct_count = int(w.get("correct_count") or 0)
+                wrong_count = int(w.get("wrong_count") or 0)
+                total = correct_count + wrong_count
+                accuracy = correct_count / total if total > 0 else 0
                 recent = self.get_recent_answers(word_id, 5)
                 recent_score = sum(recent) / len(recent) if recent else accuracy
 
                 if total < 3:
                     status = "medium" if accuracy >= 0.6 else "bad"
-                elif accuracy >= 0.80 and total >= 5 and recent_score >= 0.8:
+                elif accuracy >= 0.8 and total >= 5 and recent_score >= 0.8:
                     status = "good"
                 elif accuracy >= 0.6:
                     status = "medium"
@@ -242,11 +243,11 @@ class TrainingRepository:
 
             result.append((
                 w.get("original"),
-                wrong,
+                correct_count,
+                wrong_count,
                 status
             ))
 
-        result.sort(key=lambda x: x[1], reverse=True)
         return result[:limit]
 
     def get_words_count(self):

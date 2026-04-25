@@ -1,5 +1,5 @@
 # ui/widgets/training_widget.py
-
+from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QLineEdit, QSpinBox, QComboBox, QMessageBox, QHBoxLayout, QButtonGroup, QRadioButton
@@ -10,11 +10,12 @@ from ui.widgets.training.training_sesstion_dialog import TrainingSessionDialog
 import qtawesome as qta
 
 class TrainingWidget(QWidget):
-    def __init__(self, training_service):
+    def __init__(self, training_service, main_window):
         super().__init__()
 
         self.training_service = training_service
         self.current_task = None
+        self.main_window = main_window
 
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
@@ -246,7 +247,10 @@ class TrainingWidget(QWidget):
             )
             return
 
-        dialog = TrainingSessionDialog(self.training_service)
+        dialog = TrainingSessionDialog(
+            self.training_service,
+            theme=self.main_window.current_theme
+        )
         dialog.exec()
 
     def update_limit(self):
@@ -305,3 +309,7 @@ class TrainingWidget(QWidget):
 
         self.source_box.blockSignals(False)
         self.update_limit()
+
+    def get_current_theme(self):
+        bg = self.palette().color(QPalette.ColorRole.Window)
+        return "dark" if bg.lightness() < 128 else "light"

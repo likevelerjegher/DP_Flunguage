@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
 
         self.dict_screen = DictionaryWidget(self.service, self)
-        self.training_view = TrainingWidget(self.training_service)
+        self.training_view = TrainingWidget(self.training_service, self)
         self.statistics_view = StatWidget(self.training_repo)
 
         self.stack.addWidget(self.dict_screen)

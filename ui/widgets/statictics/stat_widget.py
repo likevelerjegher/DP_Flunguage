@@ -1,7 +1,8 @@
-from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtGui import QColor, QPalette, QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QTableWidget,
-    QTableWidgetItem, QHeaderView, QPushButton, QMessageBox, QHBoxLayout, QScrollArea, QSizePolicy, QSpacerItem
+    QTableWidgetItem, QHeaderView, QPushButton, QMessageBox, QHBoxLayout, QScrollArea, QSizePolicy, QSpacerItem,
+    QToolTip, QFrame
 )
 from PyQt6.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -10,15 +11,21 @@ from matplotlib.figure import Figure
 from ui.no_scroll_propagation_table import NoScrollPropagationTable
 from ui.styles.button_styles import danger_button_style
 
+from datetime import datetime
+from ui.widgets.statictics.stat_table_widget_item import NumericTableWidgetItem
+import qtawesome as qta
+
 MAX_TABLE_ROWS = 8
 ROW_HEIGHT = 20
 HEADER_HEIGHT = 25
+
 
 class StatWidget(QWidget):
     def __init__(self, training_repo):
         super().__init__()
 
         self.training_repo = training_repo
+        QToolTip.setFont(QFont("Arial", 12))
 
         # ===== SCROLL AREA =====
         self.scroll = QScrollArea()
@@ -44,15 +51,61 @@ class StatWidget(QWidget):
         self.layout.addSpacing(15)
 
         # ===== GENERAL =====
-        self.general_label = QLabel()
-        self.layout.addWidget(self.general_label)
+        general_container = QFrame()
+        general_container_layout = QVBoxLayout(general_container)
+        general_container_layout.setContentsMargins(12, 0, 0, 0)
 
-        # ===== CHART =====
+        self.general_label = QLabel()
+        self.general_label.setStyleSheet("""
+            QLabel {
+                padding: 8px 12px;
+                border-left: 3px solid #888;
+                background: rgba(128, 128, 128, 0.06);
+                border-radius: 0px;
+                line-height: 1.6;
+            }
+        """)
+
+        general_container_layout.addWidget(self.general_label)
+        self.layout.addWidget(general_container)
+
+        # ===== TITLE =====
+        title_row = QHBoxLayout()
+
         label_hard = QLabel("Уровень усвоения слов")
         self.make_label_clean(label_hard)
 
+        self.info_btn = QPushButton()
+        self.info_btn.setFlat(True)
+        self.info_btn.setFixedSize(20, 20)
+        self.info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.info_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+        self.info_btn.setIcon(qta.icon('fa5s.info-circle', color="#888"))
+
+        # текст подсказки
+        self.info_btn.setToolTip("""
+            <b>Статусы слов:</b><br><br>
+            <b>new</b> — слово ещё не изучалось<br>
+            <b>medium</b> — средний уровень<br>
+            <b>bad</b> — слово запоминается плохо<br>
+            <b>good</b> — слово хорошо усвоено<br><br>
+    
+            <b>Логика:</b><br>
+            &lt; 3 ответов → medium<br>
+            accuracy &lt; 60% → bad<br>
+            accuracy ≥ 60% → medium<br>
+            accuracy ≥ 80% + ≥5 ответов → good
+        """)
+
+        title_row.addWidget(label_hard)
+        title_row.addWidget(self.info_btn)
+        title_row.addStretch()
+
         self.layout.addSpacing(15)
-        self.layout.addWidget(label_hard)
+        self.layout.addLayout(title_row)
+
+        # ===== CHART =====
 
         self.chart = FigureCanvas(Figure(figsize=(5, 3)))
         self.ax = self.chart.figure.add_subplot(111)
@@ -75,7 +128,8 @@ class StatWidget(QWidget):
 
         # ===== WORDS TABLE =====
         self.words_table = NoScrollPropagationTable()
-        self.words_table.setColumnCount(3)
+        self.words_table.setColumnCount(4)
+        self.words_table.setSortingEnabled(True)
 
         self.words_table.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -83,9 +137,14 @@ class StatWidget(QWidget):
         )
 
         self.words_table.setHorizontalHeaderLabels([
-            "Слово", "Ошибки", "Статус"
+            "Слово", "Верно", "Ошибки", "Статус"
         ])
-        self.words_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        header = self.words_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
 
         self.layout.addWidget(self.words_table)
 
@@ -150,13 +209,19 @@ class StatWidget(QWidget):
 
     # ================= SESSIONS =================
 
+    def _format_date(self, date_str):
+        try:
+            return datetime.fromisoformat(date_str).strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            return date_str[:16]
+
     def load_sessions(self):
         rows = self.training_repo.get_last_sessions()
 
         self.sessions_table.setRowCount(len(rows))
 
         for i, (session_id, date, mode, words_count, score, duration) in enumerate(rows):
-            self.sessions_table.setItem(i, 0, QTableWidgetItem(date[:19]))
+            self.sessions_table.setItem(i, 0, QTableWidgetItem(self._format_date(date)))
             self.sessions_table.setItem(i, 1, QTableWidgetItem(mode))
             self.sessions_table.setItem(i, 2, QTableWidgetItem(str(words_count)))
             self.sessions_table.setItem(i, 3, QTableWidgetItem(f"{score}%"))
@@ -175,22 +240,32 @@ class StatWidget(QWidget):
     # ================= HARD WORDS =================
 
     def load_hard_words(self):
-
         rows = self.training_repo.get_words_with_status()
 
         filtered = [
-            (row[0], row[1], row[2])
-            for row in rows
-            if row[2] in ("medium", "bad")
+            (word, correct, wrong, status)
+            for word, correct, wrong, status in rows
+            if status in ("medium", "bad")
         ]
 
+        self.words_table.setSortingEnabled(False)
         self.words_table.setRowCount(len(filtered))
 
-        for i, (word, wrong, status) in enumerate(filtered):
-            self.words_table.setItem(i, 0, QTableWidgetItem(word))
-            self.words_table.setItem(i, 1, QTableWidgetItem(str(wrong)))
-            self.words_table.setItem(i, 2, QTableWidgetItem(status))
+        for i, (word, correct, wrong, status) in enumerate(filtered):
+            word_item = QTableWidgetItem(word)
+            correct_item = NumericTableWidgetItem(str(correct))
+            wrong_item = NumericTableWidgetItem(str(wrong))
+            status_item = QTableWidgetItem(status)
 
+            correct_item.setData(Qt.ItemDataRole.UserRole, correct)
+            wrong_item.setData(Qt.ItemDataRole.UserRole, wrong)
+
+            self.words_table.setItem(i, 0, word_item)
+            self.words_table.setItem(i, 1, correct_item)
+            self.words_table.setItem(i, 2, wrong_item)
+            self.words_table.setItem(i, 3, status_item)
+
+        self.words_table.setSortingEnabled(True)
         self.container.adjustSize()
         self.scroll.widget().adjustSize()
 
