@@ -2,7 +2,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTabWidget,
     QPushButton, QLabel, QFrame, QHBoxLayout, QMessageBox, QTableWidget, QTableWidgetItem, QAbstractItemView,
-    QHeaderView, QLineEdit, QSizePolicy
+    QHeaderView, QLineEdit, QSizePolicy, QScrollArea
 )
 
 from ui.styles.button_styles import primary_button_style, danger_button_style
@@ -230,11 +230,19 @@ class DictionaryWidget(QWidget):
 
         self.btn_refresh_recommend = QPushButton("Обновить рекомендации")
         self.btn_refresh_recommend.clicked.connect(self.load_recommendations)
-
         self.recommend_layout.addWidget(self.btn_refresh_recommend)
 
-        self.recommend_container = QVBoxLayout()
-        self.recommend_layout.addLayout(self.recommend_container)
+        # SCROLL AREA (ОБЯЗАТЕЛЬНО)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+
+        self.recommend_container_widget = QWidget()
+        self.recommend_container = QVBoxLayout(self.recommend_container_widget)
+
+        self.scroll_area.setWidget(self.recommend_container_widget)
+
+        self.recommend_layout.addWidget(self.scroll_area)
 
         self.load_recommendations()
 
@@ -243,31 +251,37 @@ class DictionaryWidget(QWidget):
 
         words = self.main_window.training_service.get_recommended_words(limit=15)
 
+        print("UI WORDS:", words)
+
         if not words:
-            self.recommend_container.addWidget(QLabel("Нет рекомендаций"))
+            label = QLabel("Нет рекомендаций")
+            self.recommend_container.addWidget(label)
             return
 
         for w in words:
             card = QFrame()
             card.setStyleSheet("border: 1px solid #333; border-radius: 6px;")
 
-            layout = QHBoxLayout()
+            layout = QHBoxLayout(card)
 
-            label = QLabel(
-                f"{w['word']} — {', '.join(w['translation']) if isinstance(w['translation'], list) else w['translation']}")
+            translation = w.get("translation") or []
+            if isinstance(translation, str):
+                translation = [translation]
+
+            translation = ", ".join(translation[:3]) if translation else "нет перевода"
+
+            label = QLabel(f"{w['word']} — {translation}")
 
             btn = QPushButton("Добавить в словарь")
-
-            btn.clicked.connect(
-                lambda _, word=w: self.add_recommended_word(word)
-            )
+            btn.clicked.connect(lambda _, word=w: self.add_recommended_word(word))
 
             layout.addWidget(label)
             layout.addStretch()
             layout.addWidget(btn)
 
-            card.setLayout(layout)
             self.recommend_container.addWidget(card)
+
+        self.recommend_container.addStretch()
 
     def add_recommended_word(self, word):
         self.main_window.word_service.create_word({

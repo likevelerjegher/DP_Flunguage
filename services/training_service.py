@@ -234,11 +234,16 @@ class TrainingService:
     def _to_dict(self, word):
         return dict(word)
 
+    def normalize_translation(self, w):
+        tr = w.get("translations") or w.get("translation") or []
+
+        if isinstance(tr, str):
+            tr = [tr]
+
+        return tr
+
     def get_recommended_words(self, limit=15):
         good_words, bad_words = self.get_recommendation_data()
-
-        print("GOOD:", good_words)
-        print("BAD:", bad_words)
 
         recommended_words = self.recommender.recommend(
             good_words,
@@ -246,35 +251,54 @@ class TrainingService:
             top_n=limit
         )
 
-        # ВАЖНО: превращаем строки → полноценные слова из БД
+        print("RECOMMENDED RAW:", recommended_words)
+
         all_words = self.word_service.get_all_words()
+
+        db_index = {}
+
+        for w in all_words:
+
+            w = dict(w)  #FIX SQLITE ROW -> dict
+
+            key1 = (w.get("original") or "").lower().strip()
+            key2 = (w.get("word") or "").lower().strip()
+
+            if key1:
+                db_index[key1] = w
+
+            if key2:
+                db_index[key2] = w
 
         result = []
 
-        existing_words = {
-            w["original"].lower().strip()
-            for w in all_words
-        }
-
         for w in recommended_words:
-            found = False
+            word_norm = w.strip().lower()
 
-            for db_word in all_words:
-                if db_word["original"].lower().strip() == w:
-                    result.append({
-                        "word": db_word["original"],
-                        "translation": db_word["translation"]
-                    })
-                    found = True
-                    break
+            if word_norm in db_index:
+                db_word = db_index[word_norm]
 
-            # если нет в БД — всё равно показываем
-            if not found:
+                translations = db_word.get("translations") or db_word.get("translation") or []
+                if isinstance(translations, str):
+                    translations = [translations]
+
                 result.append({
-                    "word": w,
-                    "translation": "(рекомендуется)"
+                    "word": db_word.get("original", word_norm),
+                    "translation": translations[:3]
                 })
-        print("RECOMMENDED RAW:", recommended_words)
+            else:
+                meta = self.recommender.word_meta.get(word_norm)
+
+                if meta:
+                    result.append({
+                        "word": meta["word"],
+                        "translation": (meta.get("translations", []) or [])[:3]
+                    })
+                else:
+                    result.append({
+                        "word": word_norm,
+                        "translation": []
+                    })
         return result
 
     def get_recommendation_data(self):
@@ -293,12 +317,21 @@ class TrainingService:
                 continue
 
             if status == "good":
-                good.append(text)
+                good.append({
+                    "word": text,
+                    "translations": self.normalize_translation(w)
+                })
 
             elif status == "bad":
-                bad.append(text)
+                bad.append({
+                    "word": text,
+                    "translations": self.normalize_translation(w)
+                })
 
         return good, bad
 
     def get_word_text(self, w):
-        return (w.get("original") or "").lower().strip()
+        return (w.get("word") or w.get("original") or "").lower().strip()
+
+    def get_word_translations(self, w):
+        return w.get("translations") or []

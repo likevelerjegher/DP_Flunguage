@@ -14,12 +14,19 @@ class WordRecommender:
         with open(base_dir / "vocab.json", "r", encoding="utf-8") as f:
             raw_vocab = json.load(f)
 
+        meta_path = base_dir / "word_meta.json"
+        if meta_path.exists():
+            with open(meta_path, "r", encoding="utf-8") as f:
+                self.word_meta = json.load(f)
+        else:
+            self.word_meta = {}
+
         # нормализация vocab
         self.vocab = {
             k.strip().lower(): v
             for k, v in raw_vocab.items()
         }
-
+        self.all_words = set(self.vocab.keys())
         self.index_to_word = {
             i: w.strip().lower()
             for w, i in self.vocab.items()
@@ -36,8 +43,17 @@ class WordRecommender:
 
     def recommend(self, good_words, bad_words, top_n=10):
 
-        good_words = self._filter_words(good_words)
-        bad_words = self._filter_words(bad_words)
+        good_words = {
+            self._norm(w["word"])
+            for w in good_words
+        }
+
+        bad_words = {
+            self._norm(w["word"])
+            for w in bad_words
+        }
+
+        self.bad_words_raw = set(bad_words)
 
         if not good_words:
             return []
@@ -52,8 +68,12 @@ class WordRecommender:
 
             word = self._norm(self.index_to_word[i])
 
-            # уже изученные не рекомендуем
-            if word in good_words:
+            # не показываем уже изученные (good + bad)
+            if word in good_words or word in bad_words:
+                continue
+
+            # и дополнительно исключаем bad words
+            if word in self.bad_words_raw:
                 continue
 
             sim = self._cosine(user_vector, emb)
@@ -76,14 +96,19 @@ class WordRecommender:
     def _build_user_vector(self, good_words, bad_words):
         vectors = []
 
-        for w in good_words:
+        for item in good_words:
+            if isinstance(item, dict):
+                w = item["word"]
+            else:
+                w = item
+
             vec = self._get_vector(w)
             if vec is not None:
                 vectors.append(vec)
 
         # ВАЖНО: не ноль-вектор
         if not vectors:
-            return np.mean(self.embeddings, axis=0)
+            return np.mean(self.embeddings, axis=0) * 0.01
 
         vec = np.mean(vectors, axis=0)
 
@@ -99,29 +124,27 @@ class WordRecommender:
     # =========================
 
     def _error_boost(self, word, bad_words):
-        """
-        Если слово похоже на ошибочные — повышаем шанс рекомендации
-        """
-
-        if not bad_words:
-            return 0
-
         word_vec = self._get_vector(word)
         if word_vec is None:
             return 0
 
-        similarities = []
+        max_sim = 0
 
-        for w in bad_words:
-            vec = self._get_vector(w)
-            if vec is not None:
-                similarities.append(self._cosine(word_vec, vec))
+        for item in bad_words:
+            if isinstance(item, dict):
+                w = item["word"]
+            else:
+                w = item
 
-        if not similarities:
-            return 0
+            bad_vec = self._get_vector(w)
+            if bad_vec is None:
+                continue
 
-        # если похоже на ошибки → даём небольшой буст
-        return max(similarities) * 0.2
+            sim = self._cosine(word_vec, bad_vec)
+            max_sim = max(max_sim, sim)
+
+        # штрафуем похожие на "bad" слова
+        return -max_sim * 0.3
 
     # =========================
     # VECTOR ACCESS
