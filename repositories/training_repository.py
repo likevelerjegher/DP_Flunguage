@@ -163,11 +163,13 @@ class TrainingRepository:
 
     def get_word_groups_stats(self):
         cursor = self.storage.conn.cursor()
-        rows = cursor.execute("SELECT id FROM words").fetchall()
+        rows = cursor.execute("SELECT * FROM words").fetchall()
 
         new = good = medium = bad = 0
 
-        for (word_id,) in rows:
+        for w in rows:
+            w = dict(w)
+            word_id = w["id"]
 
             history = self.get_answers_count(word_id)
 
@@ -175,19 +177,29 @@ class TrainingRepository:
                 new += 1
                 continue
 
-            recent = self.get_recent_answers(word_id, 20)
+            correct = int(w.get("correct_count") or 0)
+            wrong = int(w.get("wrong_count") or 0)
+            total = correct + wrong
 
-            correct = sum(recent)
-            total = len(recent)
+            if total == 0:
+                new += 1
+                continue
 
-            accuracy = correct / total if total else 0
+            accuracy = correct / total
+            recent = self.get_recent_answers(word_id, 5)
+            recent_score = sum(recent) / len(recent) if recent else accuracy
 
-            if total < 5 or accuracy < 0.6:
-                bad += 1
-            elif accuracy >= 0.85 and total >= 10:
+            if total < 3:
+                if accuracy >= 0.6:
+                    medium += 1
+                else:
+                    bad += 1
+            elif accuracy >= 0.8 and total >= 5 and recent_score >= 0.8:
                 good += 1
-            else:
+            elif accuracy >= 0.6:
                 medium += 1
+            else:
+                bad += 1
 
         return {
             "new": new,
@@ -204,29 +216,29 @@ class TrainingRepository:
 
         for w in rows:
             w = dict(w)
+            word_id = w["id"]
 
-            correct = int(w.get("correct_count") or 0)
-            wrong = int(w.get("wrong_count") or 0)
-            total = correct + wrong
-
-            history = self.get_answers_count(w["id"])
+            history = self.get_answers_count(word_id)
 
             if history == 0:
                 status = "new"
+                wrong = int(w.get("wrong_count") or 0)
             else:
-                recent = self.get_recent_answers(w["id"], 20)
+                correct = int(w.get("correct_count") or 0)
+                wrong = int(w.get("wrong_count") or 0)
+                total = correct + wrong
+                accuracy = correct / total if total > 0 else 0
+                recent = self.get_recent_answers(word_id, 5)
+                recent_score = sum(recent) / len(recent) if recent else accuracy
 
-                correct = sum(recent)
-                total = len(recent)
-
-                accuracy = correct / total if total else 0
-
-                if total < 5 or accuracy < 0.6:
-                    status = "bad"
-                elif accuracy >= 0.85 and total >= 10:
+                if total < 3:
+                    status = "medium" if accuracy >= 0.6 else "bad"
+                elif accuracy >= 0.80 and total >= 5 and recent_score >= 0.8:
                     status = "good"
-                else:
+                elif accuracy >= 0.6:
                     status = "medium"
+                else:
+                    status = "bad"
 
             result.append((
                 w.get("original"),

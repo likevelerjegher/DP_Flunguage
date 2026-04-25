@@ -62,7 +62,6 @@ class TrainingService:
             return "medium"
 
         history_count = self.repo.get_answers_count(word_id) if self.repo else 0
-
         if history_count == 0:
             return "new"
 
@@ -70,18 +69,27 @@ class TrainingService:
         wrong = int(word.get("wrong_count") or 0)
         total = correct + wrong
 
+        if total == 0:
+            return "new"
+
+        accuracy = correct / total
+
         recent = self.repo.get_recent_answers(word_id) if self.repo else []
         recent = recent[-5:]
-        recent_score = sum(recent) / len(recent) if recent else 0
-        accuracy = correct / total if total > 0 else 0
+        recent_score = sum(recent) / len(recent) if recent else accuracy
 
-        if total < 5 or accuracy < 0.6:
+        if total < 3:
+            if accuracy >= 0.6:
+                return "medium"
             return "bad"
 
-        if accuracy >= 0.85 and total >= 10 and recent_score >= 0.8:
+        if accuracy >= 0.8 and total >= 5 and recent_score >= 0.8:
             return "good"
 
-        return "medium"
+        if accuracy >= 0.6:
+            return "medium"
+
+        return "bad"
 
     def get_next_task(self):
         if not self.words_queue:
@@ -228,7 +236,21 @@ class TrainingService:
 
     def get_recommended_words(self, limit=10):
         good, bad = self.get_recommendation_data()
-        return self.recommender.recommend(good, bad, limit)
+        recommended_texts = self.recommender.recommend(good, bad, limit)
+
+        all_words = self.word_service.get_all_words()
+
+        result = []
+
+        for text in recommended_texts:
+            for w in all_words:
+                word_text = self.get_word_text(w)
+
+                if word_text == text:
+                    result.append(dict(w))
+                    break
+
+        return result
 
     def get_recommendation_data(self):
         words = self.word_service.get_all_words()
