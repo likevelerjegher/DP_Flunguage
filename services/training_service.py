@@ -18,9 +18,12 @@ class TrainingService:
         words = [dict(w) for w in self._load_words(source_type, source_id)]
 
         has_progress = any(
-            (w.get("correct_count", 0) + w.get("wrong_count", 0)) > 0
+            self.repo.get_answers_count(w["id"]) > 0
             for w in words
-        )
+        ) if self.repo else False
+
+        if not has_progress:
+            status = "new"
 
         words = self._apply_status_filter(words, status)
 
@@ -58,19 +61,17 @@ class TrainingService:
         if word_id is None:
             return "medium"
 
+        history_count = self.repo.get_answers_count(word_id) if self.repo else 0
+
+        if history_count == 0:
+            return "new"
+
         correct = int(word.get("correct_count") or 0)
         wrong = int(word.get("wrong_count") or 0)
         total = correct + wrong
 
-        history_count = self.repo.get_answers_count(word_id) if self.repo else 0
-
-        # new — только если по слову вообще еще не было ответов
-        if history_count == 0:
-            return "new"
-
         recent = self.repo.get_recent_answers(word_id) if self.repo else []
         recent = recent[-5:]
-
         recent_score = sum(recent) / len(recent) if recent else 0
         accuracy = correct / total if total > 0 else 0
 
@@ -132,41 +133,38 @@ class TrainingService:
         return is_correct
 
     def update_word(self, word, is_correct: bool):
-        word = dict(word) # защита
-
-        word["correct_count"] = word.get("correct_count", 0)
-        word["wrong_count"] = word.get("wrong_count", 0)
-
-        if "recent_answers" not in word:
-            word["recent_answers"] = []
+        word.setdefault("correct_count", 0)
+        word.setdefault("wrong_count", 0)
+        recent = word.setdefault("recent_answers", [])
 
         if is_correct:
             word["correct_count"] += 1
-            word["recent_answers"].append(1)
+            recent.append(1)
         else:
             word["wrong_count"] += 1
-            word["recent_answers"].append(0)
+            recent.append(0)
 
-        word["recent_answers"] = word["recent_answers"][-10:]
+        word["recent_answers"] = recent[-10:]
 
     def update_progress(self, word, is_correct, time_spent):
-        word = dict(word)  # ВАЖНО — защита от sqlite3.Row
-
         if self.session and is_correct:
             self.session["correct"] += 1
 
         self.update_word(word, is_correct)
 
-        self.repo.save_word_history(word["id"], is_correct)
+        self.repo.save_word_history(
+            word["id"],
+            is_correct,
+            self.session["session_id"] if self.session else None
+        )
 
-        if self.repo:
-            self.repo.update_word_stats(
-                word["id"],
-                word["correct_count"],
-                word["wrong_count"]
-            )
+        self.repo.update_word_stats(
+            word["id"],
+            word["correct_count"],
+            word["wrong_count"]
+        )
 
-        if self.repo and self.session and self.session["use_stats"]:
+        if self.session and self.session["use_stats"]:
             self.repo.save_stat(
                 self.session["session_id"],
                 word["id"],

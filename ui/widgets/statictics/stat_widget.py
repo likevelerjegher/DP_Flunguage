@@ -181,7 +181,7 @@ class StatWidget(QWidget):
         filtered = [
             (row[0], row[1], row[2])
             for row in rows
-            if row[2] in ("Средне", "Плохо", "medium", "bad")
+            if row[2] in ("medium", "bad")
         ]
 
         self.words_table.setRowCount(len(filtered))
@@ -238,6 +238,7 @@ class StatWidget(QWidget):
         bad = stats["bad"]
 
         total = new + good + medium + bad
+
         if total == 0:
             return
 

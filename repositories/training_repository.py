@@ -121,11 +121,11 @@ class TrainingRepository:
     def delete_session(self, session_id):
         cursor = self.storage.conn.cursor()
 
+        cursor.execute("DELETE FROM word_history WHERE session_id = ?", (session_id,))
         cursor.execute("DELETE FROM training_stats WHERE session_id = ?", (session_id,))
         cursor.execute("DELETE FROM training_sessions WHERE id = ?", (session_id,))
 
         self.storage.conn.commit()
-
         self.recalc_all_stats()
 
     def get_global_stats(self):
@@ -163,24 +163,24 @@ class TrainingRepository:
 
     def get_word_groups_stats(self):
         cursor = self.storage.conn.cursor()
-        rows = cursor.execute("SELECT * FROM words").fetchall()
+        rows = cursor.execute("SELECT id FROM words").fetchall()
 
         new = good = medium = bad = 0
 
-        for w in rows:
-            w = dict(w)
+        for (word_id,) in rows:
 
-            correct = int(w.get("correct_count") or 0)
-            wrong = int(w.get("wrong_count") or 0)
-            total = correct + wrong
+            history = self.get_answers_count(word_id)
 
-            history_count = self.get_answers_count(w["id"])
-
-            if history_count == 0:
+            if history == 0:
                 new += 1
                 continue
 
-            accuracy = correct / total if total > 0 else 0
+            recent = self.get_recent_answers(word_id, 20)
+
+            correct = sum(recent)
+            total = len(recent)
+
+            accuracy = correct / total if total else 0
 
             if total < 5 or accuracy < 0.6:
                 bad += 1
@@ -209,12 +209,17 @@ class TrainingRepository:
             wrong = int(w.get("wrong_count") or 0)
             total = correct + wrong
 
-            history_count = self.get_answers_count(w["id"])
+            history = self.get_answers_count(w["id"])
 
-            if history_count == 0:
+            if history == 0:
                 status = "new"
             else:
-                accuracy = correct / total if total > 0 else 0
+                recent = self.get_recent_answers(w["id"], 20)
+
+                correct = sum(recent)
+                total = len(recent)
+
+                accuracy = correct / total if total else 0
 
                 if total < 5 or accuracy < 0.6:
                     status = "bad"
@@ -237,11 +242,11 @@ class TrainingRepository:
         cursor.execute("SELECT COUNT(*) FROM words")
         return cursor.fetchone()[0]
 
-    def save_word_history(self, word_id, is_correct):
+    def save_word_history(self, word_id, is_correct, session_id=None):
         self.storage.conn.execute("""
-            INSERT INTO word_history (word_id, is_correct)
-            VALUES (?, ?)
-        """, (word_id, int(is_correct)))
+            INSERT INTO word_history (word_id, session_id, is_correct, answered_at)
+            VALUES (?, ?, ?, datetime('now'))
+        """, (word_id, session_id, int(is_correct)))
 
         self.storage.conn.commit()
 

@@ -69,8 +69,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS word_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             word_id INTEGER NOT NULL,
+            session_id INTEGER,
             is_correct INTEGER NOT NULL,
-            answered_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            answered_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()

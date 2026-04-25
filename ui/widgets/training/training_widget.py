@@ -209,10 +209,7 @@ class TrainingWidget(QWidget):
         limit = self.limit_box.value()
 
         words = self.training_service._load_words(source_type, source_id)
-        words = self.training_service._apply_status_filter(words, status)
-
-        count = len(words)
-
+        words = self.training_service._apply_status_filter([dict(w) for w in words], status)
         count = len(words)
 
         if count < 2:
