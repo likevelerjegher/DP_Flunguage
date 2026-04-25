@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
+from ui.styles.button_styles import primary_button_style
 from ui.widgets.training.training_session_dialog import TrainingSessionDialog
 import qtawesome as qta
 
@@ -112,6 +113,10 @@ class TrainingWidget(QWidget):
         self.btn_check = QPushButton("Проверить")
         self.btn_next = QPushButton("Следующее")
         self.btn_start = QPushButton("Начать тренировку")
+        dark = self.main_window.current_theme == "dark"
+        self.btn_start.setStyleSheet(
+            primary_button_style(dark)
+        )
         # варианты (для choice)
         self.options_layout = QVBoxLayout()
 

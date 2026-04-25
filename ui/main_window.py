@@ -384,7 +384,32 @@ class MainWindow(QMainWindow):
             background: transparent;
             border-radius: 10px;
         }}
+        QRadioButton {{
+            background: transparent;
+            color: {text};
+            spacing: 6px;
+        }}
         
+        /* сам кружок */
+        QRadioButton::indicator {{
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            border: 2px solid {border};
+            background: transparent;
+        }}
+
+        QRadioButton::indicator:unchecked {{
+            background-color: transparent;
+            border: 1px solid {accent};
+
+        }}
+        
+        /* когда выбран */
+        QRadioButton::indicator:checked {{
+            background-color: rgba(40, 120, 45, 0.6);
+            border: 1px solid {accent};
+        }}
         """)
 
         self.icon_color_value = icon
@@ -392,6 +417,7 @@ class MainWindow(QMainWindow):
         self.update_toolbar_icons()
         if hasattr(self.training_view, "update_info_icon"):
             self.training_view.update_info_icon(inactive)
+
         if hasattr(self.dict_screen, "update_bin_icon"):
             self.dict_screen.update_bin_icon(inactive)
         if self.current_dictionary_screen:
@@ -401,3 +427,41 @@ class MainWindow(QMainWindow):
         self.statistics_view.update_theme(self.current_theme)
         if self.dict_screen:
             self.dict_screen.update_theme()
+
+    def primary_button_style(self):
+        if self.current_theme == "dark":
+            return """
+                QPushButton {
+                    background-color: #2563eb;
+                    color: white;
+                    border-radius: 10px;
+                    padding: 10px;
+                    font-weight: 500;
+                }
+
+                QPushButton:hover {
+                    background-color: #1d4ed8;
+                }
+
+                QPushButton:pressed {
+                    background-color: #1e40af;
+                }
+            """
+        else:
+            return """
+                QPushButton {
+                    background-color: #2563eb;
+                    color: white;
+                    border-radius: 10px;
+                    padding: 10px;
+                    font-weight: 500;
+                }
+
+                QPushButton:hover {
+                    background-color: #1d4ed8;
+                }
+
+                QPushButton:pressed {
+                    background-color: #1e40af;
+                }
+            """

@@ -38,6 +38,8 @@ def danger_button_style(dark: bool) -> str:
             color: white;
         }
         """
+
+
 def primary_button_style(dark: bool):
     if dark:
         return """
