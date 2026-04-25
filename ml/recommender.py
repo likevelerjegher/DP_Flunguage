@@ -1,6 +1,8 @@
 import os
 
 from pathlib import Path
+from random import random
+
 import numpy as np
 import json
 
@@ -59,8 +61,8 @@ class WordRecommender:
 
         self.bad_words_raw = set(bad_words)
 
-        if not good_words:
-            return []
+        if not good_words and not bad_words:
+            return self._fallback_recommend(top_n)
 
         user_vector = self._build_user_vector(good_words, bad_words)
         print("good_words:", list(good_words)[:5])
@@ -88,6 +90,12 @@ class WordRecommender:
         scored.sort(key=lambda x: x[1], reverse=True)
 
         return [w for w, _ in scored[:top_n]]
+
+    def _fallback_recommend(self, top_n):
+        # просто возвращаем случайные слова
+        words = list(self.vocab.keys())
+        random.shuffle(words)
+        return words[:top_n]
 
     # =========================
     # USER VECTOR
